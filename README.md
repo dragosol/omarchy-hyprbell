@@ -21,7 +21,9 @@ See [Credits](#credits).
 enable it, and remove Omapager Pro. Your history, snoozes and settings folder
 move across by themselves the first time Hyprbell runs. The IPC target is now
 `hyprbell` (`omarchy-shell hyprbell clear`, and so on), so update any keybinding
-that called `omapager`.
+that called `omapager`. The touchpad rule you may have installed,
+`70-omapager-touchpad.rules`, grants the same access and keeps working; there is
+no need to reinstall it under the new name.
 
 ## What Hyprbell adds
 
