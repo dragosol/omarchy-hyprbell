@@ -2166,8 +2166,20 @@ Item {
     interval: 220
     onTriggered: service.endPeek()
   }
+  // From the corner to the heading the pointer crosses the bar, which is
+  // not ours to take: nothing there reports it, so the peek waits this long
+  // for it to arrive.
+  readonly property int peekCrossing: 450
 
   function startPeek() {
+    // Back in the corner while the heading still shows: keep it, from where
+    // it is.
+    if (missedPeeking) {
+      peekAway.stop()
+      peekGrace.stop()
+      if (!peekBounce.running) peekBounce.restart()
+      return
+    }
     if (missedVisible) return
     peekAway.stop()
     peekGrace.stop()
@@ -2180,8 +2192,11 @@ Item {
     missedShown = peekShown(0)
     peekBounce.restart()
   }
-  function holdPeek() { peekGrace.stop() }
-  function leavePeek() { if (missedPeeking) peekGrace.restart() }
+  function leavePeek(wait) {
+    if (!missedPeeking) return
+    peekGrace.interval = wait || 220
+    peekGrace.restart()
+  }
   function endPeek() {
     if (!missedPeeking) return
     peekBounce.stop()
@@ -4317,9 +4332,10 @@ Item {
       // bound to the slide itself.
       mask: Region {
         Region { item: surface.showingNotifications && (!service.missedUp || service.pullingPanel) ? deck : null }
-        // The hot corner, and while the heading peeks, the corridor down the
-        // edge to it. Nothing else of the screen's edge is taken.
-        Region { item: surface.showingNotifications && !service.missedVisible ? cornerHot : null }
+        // The hot corner, and while the heading peeks, the corridor under the
+        // bar down to it. Nothing else of the screen's edge is taken: a peek
+        // must not stop the bar, or a window under the heading, being clicked.
+        Region { item: surface.showingNotifications && cornerHot.enabled ? cornerHot : null }
         Region { item: surface.showingNotifications && service.missedPeeking ? peekCorridor : null }
         Region {
           // Not while a card is still pulling it in: the panel slides in
@@ -5086,34 +5102,32 @@ Item {
         height: Style.space(4)
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
-        enabled: !service.missedVisible
+        // Kept while the heading peeks, so a pointer left in the corner keeps
+        // it out.
+        enabled: !service.missedVisible || service.missedPeeking
         onContainsMouseChanged: {
           service.cornerIn = containsMouse
           if (containsMouse) service.startPeek()
+          else service.leavePeek(service.peekCrossing)
         }
       }
 
-      // While the heading peeks: a strip down the right edge from the corner
-      // to the bottom of the heading. Some room to veer - a hand is not a
-      // ruler - but no wider than a thumb's width, so moving the pointer
-      // anywhere else takes the heading away rather than opening anything.
+      // While the heading peeks: a strip down the right edge, under the bar,
+      // as tall as the heading. Some room to veer - a hand is not a ruler -
+      // but no wider than a thumb's width. Reaching it is reaching the
+      // heading; anywhere else, the heading goes away and the click lands on
+      // whatever is there.
       MouseArea {
         id: peekCorridor
         x: surface.width - width
-        y: 0
+        y: service.barClearance
         width: Style.space(48)
-        height: service.barClearance + missedHeader.height + Style.space(6)
+        height: missedHeader.height + Style.space(6)
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
         enabled: service.missedPeeking
-        onContainsMouseChanged: {
-          if (containsMouse) service.holdPeek()
-          else service.leavePeek()
-        }
-        // Reaching the heading's height is reaching the heading.
-        onPositionChanged: function(mouse) {
-          if (mouse.y >= service.barClearance) service.revealFromPeek()
-        }
+        onContainsMouseChanged: if (containsMouse) service.revealFromPeek()
+        onPositionChanged: service.revealFromPeek()
       }
 
       // A notification's right-click menu: its own popup, so it can be as
