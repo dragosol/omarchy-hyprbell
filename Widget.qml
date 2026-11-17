@@ -1,6 +1,6 @@
 // The bar indicator, and the panel behind it.
 //
-// Nothing held back, no sharing offer, nothing on the bar. omapager takes a
+// Nothing held back, no sharing offer, nothing on the bar. hyprbell takes a
 // slot when it is keeping something from you - the desktop is silenced,
 // everything is snoozed, or one source is - and while a detected share is
 // waiting for a snooze decision. Otherwise it follows Omarchy's convention
@@ -22,11 +22,11 @@ import qs.Ui
 
 BarWidget {
   id: pager
-  moduleName: "io.github.dragosol.omapager-pro"
+  moduleName: "io.github.dragosol.hyprbell"
 
   // The daemon, if it is up. Everything that reads it degrades to empty rather
   // than breaking the bar.
-  readonly property var service: bar && bar.shell ? bar.shell.serviceFor("io.github.dragosol.omapager-pro") : null
+  readonly property var service: bar && bar.shell ? bar.shell.serviceFor("io.github.dragosol.hyprbell") : null
   readonly property bool silenced: service ? service.doNotDisturb : false
   readonly property bool sharingActive: service ? service.sharingActive : false
   readonly property bool sharingOfferPending: service ? service.sharingOfferPending : false
@@ -35,6 +35,13 @@ BarWidget {
   // the service bumps a revision whenever that map moves. This is what every
   // binding below actually depends on.
   readonly property int snoozeRevision: service ? service.snoozeRevision : 0
+  // Standing rules made from a notification's right-click menu. Listed here
+  // because a "Never" leaves nothing on screen to right-click to undo it.
+  readonly property var ruleRows: {
+    if (!service) return []
+    service.rulesRevision; service.ruleHits
+    return service.ruleList()
+  }
   readonly property int heldRevision: service ? service.heldRevision : 0
   readonly property int historyRevision: service ? service.historyRevision : 0
   readonly property var snoozed: {
@@ -403,7 +410,7 @@ BarWidget {
   // Return types are spelled out because Quickshell wants them, and `string`
   // rather than `void` because this Qt's QML grammar rejects `void` outright.
   IpcHandler {
-    target: "omapager.panel"
+    target: "hyprbell.panel"
     function open(): string { pager.open(); return "open" }
     function openSettings(): string { pager.openSettings(); return "settings" }
     // Current notification status for scripts, without opening the panel.
@@ -1423,6 +1430,72 @@ BarWidget {
                       }
                     }
                   }
+                }
+              }
+            }
+          }
+
+          PanelSeparator { visible: !pager.settingsView && pager.ruleRows.length > 0; foreground: pager.panelFg }
+
+          PanelSectionHeader {
+            visible: !pager.settingsView && pager.ruleRows.length > 0
+            text: "RULES · " + pager.ruleRows.length
+            foreground: pager.panelFg
+            fontFamily: pager.fontFamily
+          }
+
+          Column {
+            visible: !pager.settingsView && pager.ruleRows.length > 0
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Repeater {
+              model: pager.settingsView ? [] : pager.ruleRows
+
+              Item {
+                id: ruleLine
+                required property var modelData
+                width: parent.width
+                height: Math.max(ruleText.implicitHeight, forgetRule.implicitHeight, Style.spacing.controlHeight)
+
+                Column {
+                  id: ruleText
+                  anchors.left: parent.left
+                  anchors.right: forgetRule.left
+                  anchors.rightMargin: Style.spacing.xl
+                  anchors.verticalCenter: parent.verticalCenter
+
+                  Text {
+                    width: parent.width
+                    text: ruleLine.modelData.label
+                    textFormat: Text.PlainText
+                    color: pager.panelFg
+                    font.family: pager.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    elide: Text.ElideRight
+                  }
+                  Text {
+                    width: parent.width
+                    text: ruleLine.modelData.words
+                          + (ruleLine.modelData.hits > 0 ? " · " + ruleLine.modelData.hits + " cleared" : "")
+                    textFormat: Text.PlainText
+                    color: pager.dim
+                    font.family: pager.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                  }
+                }
+
+                PanelActionButton {
+                  id: forgetRule
+                  anchors.right: parent.right
+                  anchors.rightMargin: panelScrollBar.width
+                  anchors.verticalCenter: parent.verticalCenter
+                  iconText: "\u{f0450}"              // nf-md-restore
+                  tooltipText: "Forget this rule"
+                  foreground: pager.panelFg
+                  fontFamily: pager.fontFamily
+                  onClicked: pager.service.forgetRule(ruleLine.modelData.key)
                 }
               }
             }

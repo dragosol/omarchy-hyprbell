@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-loader = importlib.machinery.SourceFileLoader('omapager_action', str(ROOT / 'bin/omapager-action'))
+loader = importlib.machinery.SourceFileLoader('hyprbell_action', str(ROOT / 'bin/hyprbell-action'))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 actions = importlib.util.module_from_spec(spec)
 loader.exec_module(actions)

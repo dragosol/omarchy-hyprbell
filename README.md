@@ -1,19 +1,29 @@
-# Omapager Pro
+# Hyprbell
 
 A notification daemon for [Omarchy](https://omarchy.org) that you use with your
 hands: swipe notifications away with two fingers, pull in everything you missed
 from the edge of the touchpad, and browse it all in a Notifications panel of
 stacks that open as you point at them. Replaces the built-in notification
-service and follows your Omarchy theme, down to the window border.
+service and follows your Omarchy theme, down to the window border. Right-click
+any notification for a menu of standing rules: never show these, keep them
+silent, always let them through, clear the ones that keep coming back, or bring
+this one back later.
 
-<img src="docs/window.png" width="640" alt="The Notifications panel with stacks from Slack, X, WhatsApp and Google Calendar">
+<img src="docs/menu.gif" width="720" alt="Four notifications arrive. A right-click on one opens its menu; the pointer runs over Notify later and Deliver, the footer explaining each choice, and picks Silent, which sends the card to the panel. A second card gets Auto-clear after 3 and Clear older than a day.">
 
-Omapager Pro started as a fork of Neil Jagdish Patel's
+Hyprbell started as a fork of Neil Jagdish Patel's
 [Omapager](https://github.com/njpatel/omapager) and keeps everything it does -
 grouping, inline actions, codes, replies, snoozing, screen-sharing detection.
 See [Credits](#credits).
 
-## What Omapager Pro adds
+**Formerly Omapager Pro.** Same plugin, new name and a new id
+(`io.github.dragosol.hyprbell`). Coming from Omapager Pro: install Hyprbell,
+enable it, and remove Omapager Pro. Your history, snoozes and settings folder
+move across by themselves the first time Hyprbell runs. The IPC target is now
+`hyprbell` (`omarchy-shell hyprbell clear`, and so on), so update any keybinding
+that called `omapager`.
+
+## What Hyprbell adds
 
 **Gestures, everywhere a notification is.**
 
@@ -35,6 +45,10 @@ behind it. That is the one gesture worth knowing.
 
 A third finger arriving late turns an edge swipe back into nothing, so
 three-finger workspace swipes never catch the panel.
+
+<img src="docs/panel.gif" width="720" alt="Thirteen notifications arrive and stack by source. Resting on the Slack stack opens it. The pointer runs into the top-right corner, the Notifications panel slides in, and a right-click on a card in the panel puts it away until later.">
+
+<img src="docs/window.png" width="640" alt="The Notifications panel with stacks from Slack, X, WhatsApp and Google Calendar">
 
 **The Notifications panel.** Everything on screen now plus everything you
 missed - notifications that timed out, or were held back by a snooze or Do Not
@@ -82,7 +96,31 @@ Copied verification codes go to the clipboard the same way.
 **Window focus.** Click a notification to focus its app or browser window.
 Web notifications open their source URL when no matching window is available.
 
-**Snooze and Do Not Disturb.** Right-click a notification to snooze its source.
+**A menu for every notification.** Right-click any notification - on screen or
+in the Notifications panel - for a menu that opens where you clicked:
+
+| | |
+| --- | --- |
+| Notify later | put this one away and bring it back in 15 minutes, an hour, 3 hours or tomorrow morning (survives a restart) |
+| Snooze app | hold everything from the app back for a while; it waits in the panel |
+| Copy text / Copy code | the title and message, or the verification code (copied as sensitive) |
+| Clear stack | every notification from the app in this stack |
+| Deliver: Never | never bother you with these: not on screen, not in the panel |
+| Deliver: Silent | straight to the Notifications panel, never on screen |
+| Deliver: Always | shown even through Do Not Disturb and snoozes |
+| Auto-clear after 2× / 3× / 5× | the same message coming back again and again is cleared, with its copies, once it has tried that many times |
+| Clear older than 1h / 1d / 1w | cleared from the screen and the panel once older than that |
+| Never keep sticky | urgent ones time out like the rest instead of waiting for you |
+| Do Not Disturb, Clear everything | as in the bar panel |
+
+Rules apply to the whole app, or - with the chips on the "Rules for" row - only
+to notifications with the same title (for a chat app, the same sender). The
+narrower rule wins. Point at anything in the menu and its footer says what it
+does; at rest the footer says which rules are in force. Every rule is listed
+under **Rules** in the bar panel, where it can be forgotten - the only way back
+from a "Never", since nothing it covers reaches the screen to right-click.
+
+**Snooze and Do Not Disturb.** Snooze a source from its right-click menu.
 Use the bar panel to snooze everything or toggle Do Not Disturb.
 
 **Verification-code exception.** Let login codes through while notifications
@@ -109,39 +147,39 @@ for the live toast. Rejected files fall back to the resolved source icon.
 ## Install
 
 Check the [requirements](#requirements), choose one installation method in
-step 1, then enable Omapager in step 2.
+step 1, then enable Hyprbell in step 2.
 
 ### 1. Install
 
 #### Via the marketplace
 
-Find Omapager Pro in the [Omarchy Plugin Marketplace](https://omarchyplugins.com/)
+Find Hyprbell in the [Omarchy Plugin Marketplace](https://omarchyplugins.com/)
 and run its install command:
 
 ```bash
-omarchy plugin add https://github.com/dragosol/omarchy-omapager-pro.git
+omarchy plugin add https://github.com/dragosol/omarchy-hyprbell.git
 ```
 
 #### Via Git
 
 ```bash
-git clone https://github.com/dragosol/omarchy-omapager-pro.git \
-  ~/.config/omarchy/plugins/io.github.dragosol.omapager-pro
+git clone https://github.com/dragosol/omarchy-hyprbell.git \
+  ~/.config/omarchy/plugins/io.github.dragosol.hyprbell
 ```
 
-### 2. Enable Omapager Pro
+### 2. Enable Hyprbell
 
 Disable the built-in notification service - or the original Omapager, if you
-have it - and enable Omapager Pro. Only one notification daemon can run at a time.
+have it - and enable Hyprbell. Only one notification daemon can run at a time.
 
 ```bash
 omarchy-shell shell rescanPlugins
 omarchy plugin disable omarchy.notifications
-omarchy plugin enable io.github.dragosol.omapager-pro --section center --after omarchy.indicators
+omarchy plugin enable io.github.dragosol.hyprbell --section center --after omarchy.indicators
 omarchy restart shell
 ```
 
-Omapager Pro keeps its state where Omapager does, so switching over keeps your
+Hyprbell keeps its state where Hyprbell does, so switching over keeps your
 history, snoozes and icons.
 
 ### 3. Optional: the edge swipe
@@ -153,7 +191,7 @@ exactly what is being given, and nothing from the plugin folder runs as root:
 
 ```bash
 echo 'SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_TOUCHPAD}=="1", TAG+="uaccess"' \
-  | sudo tee /etc/udev/rules.d/70-omapager-touchpad.rules
+  | sudo tee /etc/udev/rules.d/70-hyprbell-touchpad.rules
 sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=input --action=change
 omarchy restart shell
@@ -170,7 +208,7 @@ command.
 To take the rule away again:
 
 ```bash
-sudo rm /etc/udev/rules.d/70-omapager-touchpad.rules
+sudo rm /etc/udev/rules.d/70-hyprbell-touchpad.rules
 sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=input --action=change
 ```
@@ -178,17 +216,17 @@ sudo udevadm trigger --subsystem-match=input --action=change
 ### Updates
 
 ```bash
-git -C ~/.config/omarchy/plugins/io.github.dragosol.omapager-pro pull --ff-only
+git -C ~/.config/omarchy/plugins/io.github.dragosol.hyprbell pull --ff-only
 omarchy restart shell
 ```
 
 Do not use `omarchy refresh shell`, which resets your shell configuration.
 
-### Remove Omapager Pro
+### Remove Hyprbell
 
 ```bash
-omarchy plugin disable io.github.dragosol.omapager-pro
-omarchy plugin remove io.github.dragosol.omapager-pro
+omarchy plugin disable io.github.dragosol.hyprbell
+omarchy plugin remove io.github.dragosol.hyprbell
 omarchy plugin enable omarchy.notifications
 omarchy restart shell
 ```
@@ -197,9 +235,9 @@ If you added the touchpad rule, remove it as in
 [step 3](#3-optional-the-edge-swipe).
 
 Removal keeps notification history, icon cache and other state in
-`~/.local/state/omarchy/omapager/`. Delete that directory separately if you also
+`~/.local/state/omarchy/hyprbell/`. Delete that directory separately if you also
 want to remove the stored data. A per-source icon you dropped into
-`~/.config/omarchy/omapager/icons/` stays too.
+`~/.config/omarchy/hyprbell/icons/` stays too.
 
 ## Settings
 
@@ -208,18 +246,18 @@ to choose a notification display, choose when to step aside for fullscreen
 windows, toggle countdown animation or control screen-sharing snooze
 suggestions.
 
-Changes save to the `io.github.dragosol.omapager-pro` bar-widget entry in
+Changes save to the `io.github.dragosol.hyprbell` bar-widget entry in
 `~/.config/omarchy/shell.json`. You can edit the other options there too.
 `edgeSpacing`, `fetchRemoteIcons` and `requireSandbox` are config-only. Defaults
 below apply to new configurations, not choices you have already saved.
 
-### Omapager options
+### Hyprbell options
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `stacking` | `source` | `source` gives each sender a deck. `all` uses one deck. |
 | `displayMode` | `active` | `active` follows focus for new decks. `specific` uses `displayName`. `all` mirrors notifications. Visible decks stay put in active mode. |
-| `displayName` | empty | Output for specific mode, such as `DP-1`. Omapager keeps the selection while disconnected and falls back to a connected display. |
+| `displayName` | empty | Output for specific mode, such as `DP-1`. Hyprbell keeps the selection while disconnected and falls back to a connected display. |
 | `fullscreenOverlay` | `off` | Step aside for fullscreen windows so the compositor can scan them out directly. `all` steps aside for any fullscreen window, `steam` only for Steam games (`steam_app_*`); both come back to show a notification. `all-away` and `steam-away` never cover the fullscreen display and send notifications to another display, or to history when there is none. |
 | `edgeSpacing` | `12` | Gap from the bar and screen edges, in logical pixels from 0 to 64. Config-only. |
 | `showCountdown` | `false` | Show the time-remaining animation. Turning it off does not change expiry. |
@@ -248,7 +286,7 @@ Add options to the existing widget entry. This example is not a complete
 
 ```json
 {
-  "id": "io.github.dragosol.omapager-pro",
+  "id": "io.github.dragosol.hyprbell",
   "edgeSpacing": 12,
   "showCountdown": false,
   "fontScale": 100,
@@ -286,7 +324,7 @@ pixels.
 
 ### Sharing detection
 
-Omapager detects screen, window and area sharing through the Hyprland portal.
+Hyprbell detects screen, window and area sharing through the Hyprland portal.
 It uses stream metadata, not your screen content. Click the sharing indicator
 to snooze for 30 minutes, 1 hour or 4 hours, or choose Not now.
 
@@ -296,7 +334,7 @@ selected duration, regardless of when sharing ends. Critical alerts and the
 configured verification-code exception still apply.
 
 Portal-based recording can trigger detection. Screenshots, direct VNC capture and
-apps that bypass the portal do not. Omapager tracks up to 64 video-source nodes.
+apps that bypass the portal do not. Hyprbell tracks up to 64 video-source nodes.
 Restarting the shell during a share can show the offer again. Disable suggestions
 in preferences or set `offerSnoozeWhenSharing` to `false`.
 
@@ -344,60 +382,60 @@ to `~/.config/hypr/bindings.lua`. Use `hl.unbind` to remove a conflicting bindin
 ```lua
 -- Copy the newest code and dismiss its notification.
 o.bind("SUPER + ALT + C", "Copy code from newest notification",
-       "omarchy-shell omapager offer code")
+       "omarchy-shell hyprbell offer code")
 
 -- Snooze all sources for an hour.
 o.bind("SUPER + CTRL + ALT + comma", "Snooze all notifications for an hour",
-       "omarchy-shell omapager snoozeAll 60")
+       "omarchy-shell hyprbell snoozeAll 60")
 
 -- Toggle the notification panel.
 o.bind("SUPER + CTRL + SHIFT + comma", "Notification options",
-       "omarchy-shell omapager.panel toggle")
+       "omarchy-shell hyprbell.panel toggle")
 
 -- The Notifications panel, for a keyboard.
 o.bind("SUPER + SHIFT + N", "Notifications",
-       "omarchy-shell omapager missed")
+       "omarchy-shell hyprbell missed")
 ```
 
 ## Scripting
 
 ```
-omarchy-shell omapager count            how many are on screen
-omarchy-shell omapager clear            dismiss them
-omarchy-shell omapager dnd              toggle Do Not Disturb
-omarchy-shell omapager expand           open the deck, as hovering would
-omarchy-shell omapager offer code       take the front card's offer (code|link|phone)
-omarchy-shell omapager act reply        invoke one of the sender's actions
-omarchy-shell omapager reply "text"     answer the front card ("" opens the field)
-omarchy-shell omapager snooze 60        quieten the front card's source, in minutes
-omarchy-shell omapager snoozeAll 60     quieten everything for 60 minutes, or wake it
-omarchy-shell omapager codes off        stop letting verification codes through
-omarchy-shell omapager unsnooze ""      wake everything ("" for all, or a source key)
-omarchy-shell omapager snoozes          what is snoozed, and until when
-omarchy-shell omapager stack source     switch stacking mode
-omarchy-shell omapager align right      switch which end the buttons sit at
-omarchy-shell omapager probe            show runtime configuration and helper status as JSON
-omarchy-shell omapager missed           open or close the Notifications panel ("open" / "close")
-omarchy-shell omapager swipe 200        throw the front card as a 200px swipe would
-omarchy-shell omapager scroll 120       scroll a deck taller than the screen
-omarchy-shell omapager edge "begin"     drive the edge swipe by hand: begin, move <p>, end <p> <v>, cancel
+omarchy-shell hyprbell count            how many are on screen
+omarchy-shell hyprbell clear            dismiss them
+omarchy-shell hyprbell dnd              toggle Do Not Disturb
+omarchy-shell hyprbell expand           open the deck, as hovering would
+omarchy-shell hyprbell offer code       take the front card's offer (code|link|phone)
+omarchy-shell hyprbell act reply        invoke one of the sender's actions
+omarchy-shell hyprbell reply "text"     answer the front card ("" opens the field)
+omarchy-shell hyprbell snooze 60        quieten the front card's source, in minutes
+omarchy-shell hyprbell snoozeAll 60     quieten everything for 60 minutes, or wake it
+omarchy-shell hyprbell codes off        stop letting verification codes through
+omarchy-shell hyprbell unsnooze ""      wake everything ("" for all, or a source key)
+omarchy-shell hyprbell snoozes          what is snoozed, and until when
+omarchy-shell hyprbell stack source     switch stacking mode
+omarchy-shell hyprbell align right      switch which end the buttons sit at
+omarchy-shell hyprbell probe            show runtime configuration and helper status as JSON
+omarchy-shell hyprbell missed           open or close the Notifications panel ("open" / "close")
+omarchy-shell hyprbell swipe 200        throw the front card as a 200px swipe would
+omarchy-shell hyprbell scroll 120       scroll a deck taller than the screen
+omarchy-shell hyprbell edge "begin"     drive the edge swipe by hand: begin, move <p>, end <p> <v>, cancel
 
-omarchy-shell omapager.panel toggle     the panel
-omarchy-shell omapager.panel expand x   open a source's held list, as clicking it would
-omarchy-shell omapager.panel openSettings  notification preferences
+omarchy-shell hyprbell.panel toggle     the panel
+omarchy-shell hyprbell.panel expand x   open a source's held list, as clicking it would
+omarchy-shell hyprbell.panel openSettings  notification preferences
 ```
 
 ## Demo
 
 ```bash
-bin/omapager-demo                       # the everyday scenes
-bin/omapager-demo --scene interactive   # codes, links, and the sender's buttons
-bin/omapager-demo --scene routing       # where a click sends you, per source
-bin/omapager-demo --scene reply --keep --timeout 30000  # local inline-reply demo
-bin/omapager-demo --scene close         # dismiss a stack without moving the pointer
-bin/omapager-demo --replay 40           # your own notifications, re-sent (over the bus, never on a command line)
-bin/omapager-demo --scene showcase      # a mix of senders and stacks, for a screenshot
-bin/omapager-demo --list
+bin/hyprbell-demo                       # the everyday scenes
+bin/hyprbell-demo --scene interactive   # codes, links, and the sender's buttons
+bin/hyprbell-demo --scene routing       # where a click sends you, per source
+bin/hyprbell-demo --scene reply --keep --timeout 30000  # local inline-reply demo
+bin/hyprbell-demo --scene close         # dismiss a stack without moving the pointer
+bin/hyprbell-demo --replay 40           # your own notifications, re-sent (over the bus, never on a command line)
+bin/hyprbell-demo --scene showcase      # a mix of senders and stacks, for a screenshot
+bin/hyprbell-demo --list
 ```
 
 The demos use the original named conversations and source icons. Add `--keep`
@@ -405,7 +443,7 @@ to leave existing notifications on screen.
 
 The routing scene lists the window or URL each notification should open. The
 reply scene lets you type and send a reply without contacting a phone. It saves
-the latest reply in `~/.local/state/omarchy/omapager/reply-demo/reply.json`.
+the latest reply in `~/.local/state/omarchy/hyprbell/reply-demo/reply.json`.
 Each run creates a new demo session, which expires after 30 minutes.
 
 `--scene close` keeps three cards on screen with live default actions. Repeatedly
@@ -420,19 +458,19 @@ card-body clicks.
 
 ### Automatic website icons
 
-Omapager checks local icons and its cache before fetching from a website.
+Hyprbell checks local icons and its cache before fetching from a website.
 Website-icon fetching is on by default. Set `"fetchRemoteIcons": false` in the
 widget's `shell.json` entry to stop requests and cancel the active lookup.
 Local and validated cached icons still work. Saved opt-outs survive upgrades.
 
 Requests expose your IP and request time to the source website and its icon
 hosts. They contain no notification text, verification codes, browser cookies or
-authentication headers. Omapager does not use a third-party favicon service or
+authentication headers. Hyprbell does not use a third-party favicon service or
 guess parent domains.
 
 These protections apply with or without Bubblewrap:
 
-- HTTPS on port 443 with TLS 1.2 or newer. Omapager rejects URL credentials,
+- HTTPS on port 443 with TLS 1.2 or newer. Hyprbell rejects URL credentials,
   IP literals and local or private destinations.
 - Every DNS answer must be public. Connections use those checked addresses,
   with certificate validation for the original hostname.
@@ -459,18 +497,18 @@ Sandboxed helpers receive access to the files they need. Remote icons still need
 network access, and KDE Connect receives the session bus without destination
 filtering. Bubblewrap does not isolate the QML shell itself.
 
-Run `omarchy-shell omapager probe` to check whether helpers use `sandboxed`,
+Run `omarchy-shell hyprbell probe` to check whether helpers use `sandboxed`,
 `direct` or `blocked` mode. See [the security architecture](docs/SECURITY_ARCHITECTURE.md)
 for the exact limits and access rules.
 
 ### Stored notifications and clipboard
 
-Disk history defaults to 24 hours and 100 entries. Omapager redacts detected
+Disk history defaults to 24 hours and 100 entries. Hyprbell redacts detected
 verification-code notifications before saving them, but detection cannot identify
 every secret. Copied codes clear after the configured timeout only if the
 clipboard still contains the same code.
 
-State lives in `~/.local/state/omarchy/omapager/`. See [settings](#settings) for
+State lives in `~/.local/state/omarchy/hyprbell/`. See [settings](#settings) for
 retention and clipboard options, and [SECURITY.md](SECURITY.md) to report a
 vulnerability.
 
@@ -491,7 +529,7 @@ See [Security](#security) for icon-fetching and sandbox behaviour.
 ## Contributing
 
 Issues and pull requests are welcome at
-[dragosol/omarchy-omapager-pro](https://github.com/dragosol/omarchy-omapager-pro).
+[dragosol/omarchy-hyprbell](https://github.com/dragosol/omarchy-hyprbell).
 The [development guide](docs/DEVELOPING.md) covers how the daemon is built and
 tested; `tests/virtual_touchpad.py` drives real two-finger swipes through
 libinput and Hyprland for testing gestures.
@@ -502,9 +540,9 @@ MIT. See [LICENSE](LICENSE).
 
 ## Credits
 
-Omapager Pro is built on [Omapager](https://github.com/njpatel/omapager) by
+Hyprbell is built on [Omapager](https://github.com/njpatel/omapager) by
 Neil Jagdish Patel, MIT-licensed; his copyright notice is kept in
 [LICENSE](LICENSE). The notification daemon, grouping, inline actions, replies,
 snoozing, the security model and most of what is described under Settings and
 Security are his work. The gestures, the Notifications panel, the hot corner and
-the card styling are Omapager Pro's.
+the card styling are Hyprbell's.

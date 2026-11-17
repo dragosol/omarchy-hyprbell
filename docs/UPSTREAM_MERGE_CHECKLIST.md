@@ -2,7 +2,7 @@
 
 - Fetch upstream deliberately and inspect the exact diff before merging.
 - Inspect Service.qml, Toast.qml, Widget.qml, Security.js, Markup.js, Detect.js,
-  Store.js and every bin/omapager helper for new inputs or capability sinks.
+  Store.js and every bin/hyprbell helper for new inputs or capability sinks.
 - Run static invariants before conflict resolution. Never resolve conflicts by
   dropping a security broker/wrapper in favor of an upstream direct call.
 - Add synthetic regression cases for new behavior; run the full suite afterwards.

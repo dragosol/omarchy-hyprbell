@@ -16,7 +16,7 @@ Window {
   property int index: -1
   property string phase: "start"
   property real visibleCardHeight: 0
-  readonly property string profile: Quickshell.env("OMAPAGER_TEST_PROFILE") || "default"
+  readonly property string profile: Quickshell.env("HYPRBELL_TEST_PROFILE") || "default"
 
   Plugin.Toast {
     id: toast

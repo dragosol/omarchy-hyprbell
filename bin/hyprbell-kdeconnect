@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-# omapager-kdeconnect - the phone's side of a notification.
+# hyprbell-kdeconnect - the phone's side of a notification.
 #
-#   omapager-kdeconnect list                     every phone notification, as JSON
-#   omapager-kdeconnect find APP   <body on stdin>
+#   hyprbell-kdeconnect list                     every phone notification, as JSON
+#   hyprbell-kdeconnect find APP   <body on stdin>
 #                                                the object path of a repliable match
-#   omapager-kdeconnect reply PATH <{"text","source","body"} on stdin>
+#   hyprbell-kdeconnect reply PATH <{"text","source","body"} on stdin>
 #                                                send a reply back to the phone
 #
 # Message bodies and replies arrive on stdin, never as arguments: a command line is readable
@@ -25,17 +25,17 @@ import sys
 import time
 import re
 import selectors
-from omapager_files import read_json, write_json
+from hyprbell_files import read_json, write_json
 
 BUS = "org.kde.kdeconnect"
 IFACE = "org.kde.kdeconnect.device.notifications.notification"
 
 # Only the explicitly named demo app can use the private, short-lived fixture.
 # It is never mixed into real-phone discovery or matched against another app.
-DEMO_APP = "Omapager reply demo"
+DEMO_APP = "Hyprbell reply demo"
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME",
                                     os.path.expanduser("~/.local/state")),
-                     "omarchy", "omapager", "reply-demo")
+                     "omarchy", "hyprbell", "reply-demo")
 FIXTURE = os.path.join(STATE, "notification.json")
 REPLY_LOG = os.path.join(STATE, "reply.json")
 FIXTURE_MAX_AGE = 30 * 60
@@ -236,5 +236,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
-        sys.stderr.write("omapager-kdeconnect: request rejected or service unavailable\n")
+        sys.stderr.write("hyprbell-kdeconnect: request rejected or service unavailable\n")
         sys.exit(1)

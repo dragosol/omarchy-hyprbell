@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Watch one touchpad for the right-edge reveal swipe.
 
-Given the device node by omapager-run-helper, which found it and is the only
+Given the device node by hyprbell-run-helper, which found it and is the only
 thing allowed to choose it. Prints "ready" once the pad is open, then
 begin / move <p> / end <p> <v> for each swipe, one per line, for the shell.
 """
 import os
 import sys
 
-from omapager_edge import watch
+from hyprbell_edge import watch
 
 
 def emit(line):

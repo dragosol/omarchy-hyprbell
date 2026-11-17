@@ -126,7 +126,7 @@ def fetch_once(url, limit, deadline=None):
     conn = PinnedHTTPConnection(host, port, answers, deadline)
     try:
         conn.request('GET', urlunsplit(('', '', p.path or '/', p.query, '')),
-                     headers={'Host': host, 'User-Agent': 'omapager-hardened/0.1',
+                     headers={'Host': host, 'User-Agent': 'hyprbell-hardened/0.1',
                               'Accept-Encoding': 'identity', 'Connection': 'close'})
         stream_socket = conn.sock
         if stream_socket is not None:

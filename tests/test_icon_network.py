@@ -24,7 +24,7 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-ICON = ROOT / "bin" / "omapager-icon"
+ICON = ROOT / "bin" / "hyprbell-icon"
 # Load the extensionless script through a source loader so tests can patch its
 # live module globals without executing main().
 sys.path.insert(0, str(ROOT / "bin"))
@@ -36,7 +36,7 @@ BLOCKED = (
 )
 
 def load_icon_module():
-    loader = importlib.machinery.SourceFileLoader("omapager_icon_network", str(ICON))
+    loader = importlib.machinery.SourceFileLoader("hyprbell_icon_network", str(ICON))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
@@ -47,7 +47,7 @@ def load_icon_module():
 class IconNetworkTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory(prefix="omapager-network-")
+        cls.temp = tempfile.TemporaryDirectory(prefix="hyprbell-network-")
         cls.addClassCleanup(cls.temp.cleanup)
         cert = Path(cls.temp.name) / "cert.pem"
         key = Path(cls.temp.name) / "key.pem"
@@ -298,7 +298,7 @@ class IconNetworkTest(unittest.TestCase):
 
     def test_slow_connection_close_body_obeys_total_deadline(self):
         with self.transport(slow=True) as (get, state), \
-                mock.patch("omapager_http.REQUEST_DEADLINE", .12):
+                mock.patch("hyprbell_http.REQUEST_DEADLINE", .12):
             with self.assertRaises(TimeoutError):
                 get("https://source.test/icon")
             self.assertEqual(state["requests"], [("source.test", "/icon")])

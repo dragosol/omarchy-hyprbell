@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# omapager-store - the notification store, driven from Service.qml.
+# hyprbell-store - the notification store, driven from Service.qml.
 #
 #   put              read one notification JSON on stdin, write it to live/
 #   close KEY WHY    move live/KEY.json into history/, trimmed to size and age
@@ -11,8 +11,11 @@
 #   quiet-save       read the quiet state as JSON on stdin
 #   held [N]         print the newest N that were never shown, newest first
 #   forget-all       empty the history
+#   later-put SECS   read one notification JSON on stdin, keep it to show again
+#   later-due        print the ones whose time has come, and forget them
+#   later-list       print what is waiting, as [{key, at}]
 #
-# Everything lives in ~/.local/state/omarchy/omapager/. It is state, not cache:
+# Everything lives in ~/.local/state/omarchy/hyprbell/. It is state, not cache:
 # what you were told should survive a `rm -rf ~/.cache`. History is a log to
 # read back, not a queue to work through. Keeping it as one file per
 # notification means a half-written entry costs one notification instead of the
@@ -21,14 +24,16 @@ import json
 import os
 import re
 import html
-from omapager_files import private_dir, write_json, read_json, input_json
+from hyprbell_files import private_dir, write_json, read_json, input_json
 import sys
 import time
 
-ROOT = os.path.expanduser("~/.local/state/omarchy/omapager")
+ROOT = os.path.expanduser("~/.local/state/omarchy/hyprbell")
 LIVE = os.path.join(ROOT, "live")
 HISTORY = os.path.join(ROOT, "history")
 ICONS = os.path.join(ROOT, "icons")
+LATER = os.path.join(ROOT, "later")
+LATER_MAX = 200
 QUIET = os.path.join(ROOT, "quiet.json")
 SNOOZES = os.path.join(ROOT, "snoozes.json")     # what quiet.json used to be
 # What history is for: replaying the last few onto the screen, and showing what
@@ -47,7 +52,7 @@ ICON_DAYS = 60
 
 
 def ensure():
-    for d in (ROOT, LIVE, HISTORY, ICONS):
+    for d in (ROOT, LIVE, HISTORY, ICONS, LATER):
         private_dir(d)
     for d in (LIVE, HISTORY):
         for name in os.listdir(d):
@@ -211,7 +216,7 @@ def trim_history():
 
 
 def trim_icons():
-    """Resolved icons live under icons/, written by omapager-icon."""
+    """Resolved icons live under icons/, written by hyprbell-icon."""
     cutoff = time.time() - ICON_DAYS * 86400
     dropped = 0
     for name in os.listdir(ICONS):
@@ -267,20 +272,118 @@ def cmd_held(limit):
 # dealing with it - it timed out on its own, or it was held back by a snooze
 # or Do Not Disturb. What you dismissed you have seen, and stays gone; so does
 # anything you have since dismissed from the missed panel ("seen").
-MISSED_REASONS = ("expired", "snoozed", "silenced")
+# "silent" is a rule's way of sending something straight here.
+MISSED_REASONS = ("expired", "snoozed", "silenced", "silent")
+
+
+def max_age_for(entry, rules):
+    """The "Clear older than" rule over this entry, in seconds, or 0. The
+    same lookup as Service.qml's effectiveRule: a rule for this kind of
+    message (its title) wins over the rule for its whole app."""
+    group = entry.get("groupKey") if isinstance(entry.get("groupKey"), str) else ""
+    summary = entry.get("summary") if isinstance(entry.get("summary"), str) else ""
+    kind = re.sub(r"\s+", " ", summary).strip()[:120]
+    for key in ("kind:%s\x1f%s" % (group, kind) if kind else None, "app:%s" % group):
+        rule = rules.get(key) if key else None
+        if isinstance(rule, dict):
+            age = rule.get("maxAge")
+            if isinstance(age, (int, float)) and not isinstance(age, bool) and age > 0:
+                return float(age)
+    return 0
+
+
+def blocked(entry, rules):
+    group = entry.get("groupKey") if isinstance(entry.get("groupKey"), str) else ""
+    summary = entry.get("summary") if isinstance(entry.get("summary"), str) else ""
+    kind = re.sub(r"\s+", " ", summary).strip()[:120]
+    kind_rule = rules.get("kind:%s\x1f%s" % (group, kind)) if kind else None
+    if isinstance(kind_rule, dict) and kind_rule.get("delivery"):
+        return kind_rule.get("delivery") == "never"
+    app_rule = rules.get("app:%s" % group)
+    return isinstance(app_rule, dict) and app_rule.get("delivery") == "never"
 
 
 def cmd_unseen(limit):
+    rules = read_quiet().get("rules")
+    rules = rules if isinstance(rules, dict) else {}
+    now = time.time()
     out = []
     for name in sorted(os.listdir(HISTORY), reverse=True):
         if not name.endswith(".json"):
             continue
-        entry = read_json(os.path.join(HISTORY, name))
+        path = os.path.join(HISTORY, name)
+        entry = read_json(path)
         if (entry is not None and entry.get("closed_reason") in MISSED_REASONS
                 and not entry.get("seen")):
+            # A rule made since it arrived: too old for its "Clear older
+            # than", or from something you have said never to show. Seen, so
+            # it is not weighed again on every read.
+            if rules:
+                age = max_age_for(entry, rules)
+                ts = entry.get("ts")
+                ts = ts if isinstance(ts, (int, float)) and not isinstance(ts, bool) else now
+                if (age and now - ts > age) or blocked(entry, rules):
+                    entry["seen"] = True
+                    write_json(path, sanitise(entry))
+                    continue
             out.append(entry)
             if len(out) >= limit:
                 break
+    json.dump(out, sys.stdout, separators=(",", ":"))
+    return 0
+
+
+# Notify later: one file per notification, its sanitised copy and when to
+# show it again - the same redaction history gets, since this is also the
+# text of a message somebody sent you, kept on disk for a while.
+def cmd_later_put(seconds):
+    seconds = float(seconds)
+    if not (0 < seconds <= 30 * 86400):
+        return 2
+    entry = sanitise(input_json(sys.stdin))
+    key = safe(entry.get("key"))
+    write_json(os.path.join(LATER, key + ".json"), {"at": time.time() + seconds, "entry": entry})
+    names = sorted(n for n in os.listdir(LATER) if n.endswith(".json"))
+    for name in names[:-LATER_MAX]:
+        os.unlink(os.path.join(LATER, name))
+    return 0
+
+
+def later_entries():
+    for name in sorted(os.listdir(LATER)):
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(LATER, name)
+        if os.path.islink(path):
+            continue
+        item = read_json(path)
+        if (not isinstance(item, dict) or not isinstance(item.get("entry"), dict)
+                or not isinstance(item.get("at"), (int, float))):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            continue
+        yield path, item
+
+
+def cmd_later_due():
+    now = time.time()
+    out = []
+    for path, item in later_entries():
+        if item["at"] > now:
+            continue
+        out.append(sanitise(item["entry"]))
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    json.dump(out, sys.stdout, separators=(",", ":"))
+    return 0
+
+
+def cmd_later_list():
+    out = [{"key": item["entry"].get("key", ""), "at": item["at"]} for _, item in later_entries()]
     json.dump(out, sys.stdout, separators=(",", ":"))
     return 0
 
@@ -397,6 +500,12 @@ def main():
         return cmd_quiet_save()
     if verb == "tidy":
         return cmd_tidy()
+    if verb == "later-put":
+        return cmd_later_put(args[1])
+    if verb == "later-due":
+        return cmd_later_due()
+    if verb == "later-list":
+        return cmd_later_list()
     return 2
 
 
@@ -406,5 +515,5 @@ if __name__ == "__main__":
     except BrokenPipeError:
         pass
     except (OSError, ValueError, TypeError, IndexError, RecursionError):
-        sys.stderr.write("omapager-store: invalid input or unavailable private state\n")
+        sys.stderr.write("hyprbell-store: invalid input or unavailable private state\n")
         sys.exit(1)

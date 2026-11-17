@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# omapager-icon - work out what picture belongs to a notification.
+# hyprbell-icon - work out what picture belongs to a notification.
 #
-#   omapager-icon --key web:app.slack.com --app "Google Chrome" \
+#   hyprbell-icon --key web:app.slack.com --app "Google Chrome" \
 #                 --app-icon google-chrome --source app.slack.com \
 #                 --scheme dark [--fetch]
 #
@@ -23,11 +23,11 @@ import sys
 import time
 import urllib.parse
 import warnings
-from omapager_http import fetch as get, parse_url, public_hostname
-from omapager_files import private_dir, write_bytes, write_json, read_json
+from hyprbell_http import fetch as get, parse_url, public_hostname
+from hyprbell_files import private_dir, write_bytes, write_json, read_json
 
-CONFIG = os.path.expanduser("~/.config/omarchy/omapager/icons")
-CACHE = os.path.expanduser("~/.local/state/omarchy/omapager/icons")
+CONFIG = os.path.expanduser("~/.config/omarchy/hyprbell/icons")
+CACHE = os.path.expanduser("~/.local/state/omarchy/hyprbell/icons")
 INDEX = os.path.join(CACHE, "index.json")
 RETRY_AFTER = 7 * 86400          # do not hammer a site that has no icon
 
@@ -176,7 +176,7 @@ def slug(text):
 
 # ---------------------------------------------------------------- 1. yours
 def from_config(names):
-    """~/.config/omarchy/omapager/icons/<name>.png - drop a file in, done."""
+    """~/.config/omarchy/hyprbell/icons/<name>.png - drop a file in, done."""
     for name in names:
         for ext in EXTS:
             path = os.path.join(CONFIG, slug(name) + ext)

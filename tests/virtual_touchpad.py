@@ -24,7 +24,7 @@ def make():
             (e.ABS_MT_POSITION_Y, AbsInfo(0, 0, H, 0, 0, RES)),
         ],
     }
-    return UInput(caps, name="omapager-test-touchpad", input_props=[e.INPUT_PROP_POINTER, e.INPUT_PROP_BUTTONPAD])
+    return UInput(caps, name="hyprbell-test-touchpad", input_props=[e.INPUT_PROP_POINTER, e.INPUT_PROP_BUTTONPAD])
 
 def warp(x, y):
     subprocess.run(["hyprctl", "dispatch", "hl.dsp.cursor.move({x=%d,y=%d})" % (x, y)], capture_output=True)
@@ -64,7 +64,7 @@ def swipe(ui, dx_mm, dy_mm, ms=260, steps=26):
     ui.syn()
 
 def probe():
-    d = json.loads(subprocess.run(["omarchy-shell", "omapager", "probe"], capture_output=True, text=True).stdout)
+    d = json.loads(subprocess.run(["omarchy-shell", "hyprbell", "probe"], capture_output=True, text=True).stdout)
     keys = ["toasts", "swipeKeys", "thrown", "missedOpen", "missedShown", "missedCount", "missedScroll", "lastWheel"]
     return {k: d.get(k) for k in keys}
 

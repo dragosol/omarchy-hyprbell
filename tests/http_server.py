@@ -11,7 +11,7 @@ import threading
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bin'))
-import omapager_http as net
+import hyprbell_http as net
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -38,7 +38,7 @@ class Handler(BaseHTTPRequestHandler):
                 pass
 
 
-with tempfile.TemporaryDirectory(prefix='omapager-tls-smoke-') as directory:
+with tempfile.TemporaryDirectory(prefix='hyprbell-tls-smoke-') as directory:
     cert, key = Path(directory) / 'cert.pem', Path(directory) / 'key.pem'
     subprocess.run([
         'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',

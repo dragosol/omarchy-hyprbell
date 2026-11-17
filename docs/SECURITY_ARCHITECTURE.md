@@ -17,14 +17,14 @@ integration stability, as the plan requires.
    Its independent detector uses bounded summary/raw-body/body content, not
    generated metadata, with the same product/year exclusions and 24-before /
    72-after keyword windows as the JS detector. Recognition remains heuristic.
-5. QML launches `omapager-run-*` wrappers after Widget.applySettings supplies the
+5. QML launches `hyprbell-run-*` wrappers after Widget.applySettings supplies the
    saved helper policy. Bubblewrap is used when its preflight succeeds. Otherwise
    auto mode runs helpers directly; `requireSandbox: true` refuses that fallback.
    Actual helper failures are never retried directly. The probe reports capability
    and selected mode, not successful completion of every helper operation.
 6. Remote icons are automatic by default. The config-only fetchRemoteIcons option disables fetching.
    Local/validated cached icons remain usable with fetching off. The same network
-   and image checks apply in both direct and sandboxed modes. `omapager_http.py`
+   and image checks apply in both direct and sandboxed modes. `hyprbell_http.py`
    resolves once per hop, validates
    every address (including against an IPv6-mapped-IPv4 bypass) and connects
    to a numeric sockaddr, falling back across every validated address for that
@@ -32,7 +32,7 @@ integration stability, as the plan requires.
    fallback attempt. TLS validates the original hostname. The original host
    supplies SNI and Host; there is no urllib opener to route through an
    environment proxy in the first place. This is the sole HTTP implementation
-   `bin/omapager-icon` uses — upstream (06f511) independently reached the same
+   `bin/hyprbell-icon` uses — upstream (06f511) independently reached the same
    resolve-once/validate-all/connect-direct design inline in that file; this
    module is kept as the one transport rather than carrying both. A remote
    cache hit is re-validated against the same raster/format policy a fresh
@@ -48,7 +48,7 @@ integration stability, as the plan requires.
    is re-parsed on activate, never written to history, and ignored from any
    other app. Screenshot editors tensaku-edit, tensaku, satty, swappy and omasnap
    retain their bare-name, /usr/bin and /usr/local/bin policy. The separate
-   `omapager-action` broker handles `xdg-open` and `omarchy-agent-crash` (bare or
+   `hyprbell-action` broker handles `xdg-open` and `omarchy-agent-crash` (bare or
    /usr/bin spellings only). File opening requires one absolute local path with
    no traversal, controls or backslashes, not an arbitrary URL. At activation
    the broker rejects missing files, non-regular files, final symlinks, executable

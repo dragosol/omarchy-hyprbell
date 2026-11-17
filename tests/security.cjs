@@ -98,6 +98,9 @@ const capacitySource = [
   extract(source, 'function wantSenderImage(row)', '\n  Process {'),
   extract(source, 'function nextKey()', '// ------------------------------------------------------------- arrival'),
   extract(source, 'function handleNotification(notification)', '// Qt.callLater: mutating the model'),
+  // The right-click menu's rules, as arrival consults them.
+  extract(source, 'function kindText(row)', 'function cleanRule(value)'),
+  extract(source, 'function repeatSignature(row)', 'function ruleWords(rule)'),
   extract(source, 'function showRow(row)', "// Let go of the sender's object"),
   extract(source, 'function release(key, reason)', '// ------------------------------------------------------------- departure'),
   extract(source, 'function closeToast(key, reason)', '// What the sender said can be done'),
@@ -128,6 +131,8 @@ function newCapacityScope() {
     displayNames: ['fixture-display'], focusedDisplayName: 'fixture-display',
     Quickshell: { screens: [] }, Hyprland: { monitorFor: screen => screen.monitor },
     snoozeRevision: 0, snoozes: {},
+    rules: {}, ruleHits: {}, repeatSeen: {}, repeatWindow: 6 * 3600,
+    ruleDefaults: { delivery: '', repeatLimit: 0, maxAge: 0, noSticky: false },
     codesBypassQuiet: false, hideSettingsAction: false,
     lowDuration: 5000, normalDuration: 8000, maxDuration: 30000,
     snoozedUntil: key => s.snoozes[key] || 0,
@@ -327,6 +332,50 @@ function newCapacityScope() {
   assert.ok(!JSON.stringify(s.recentRows).includes('938271'));
   s.snoozes[group] = 1;
   assert.equal(s.recentForPanel(5).length, 0);
+}
+
+{ // Right-click rules: never drops without recording, silent goes to the panel,
+  // always beats Do Not Disturb, and a repeat past its limit is cleared.
+  const writes = [];
+  const s = newCapacityScope();
+  s.Store = { ...s.Store, write: (proc, bin, verb, payload, args) => writes.push([verb, ...(args || [])]) };
+  const first = s.fakeNotification(1, 'Spam');
+  s.handleNotification(first);
+  s.drainCallLater();
+  const group = s.toasts.get(0).groupKey;
+  s.rules['app:' + group] = { delivery: 'never' };
+  writes.length = 0;
+  const blocked = s.fakeNotification(2, 'Spam again');
+  s.handleNotification(blocked);
+  assert.equal(writes.length, 0, 'a never rule must not record the message');
+  assert.equal(blocked.tracked, false);
+  assert.equal(s.ruleHits['app:' + group], 1);
+
+  s.rules['app:' + group] = { delivery: 'silent' };
+  s.handleNotification(s.fakeNotification(3, 'Quiet one', 2));
+  assert.deepEqual(writes.map(w => w[0] + ':' + (w[2] || '')), ['put:', 'close:silent'],
+                   'silent holds back even an urgent one, into the panel');
+
+  writes.length = 0;
+  s.rules['app:' + group] = { delivery: 'always' };
+  s.doNotDisturb = true;
+  s.handleNotification(s.fakeNotification(4, 'Through DND'));
+  assert.ok(!writes.some(w => w[0] === 'close'), 'always goes through Do Not Disturb');
+  s.doNotDisturb = false;
+
+  // A kind rule beats its app rule, field by field.
+  s.rules['kind:' + group + '\u001fNag'] = { delivery: 'never' };
+  assert.equal(s.effectiveRule({ groupKey: group, summary: 'Nag' }).delivery, 'never');
+  assert.equal(s.effectiveRule({ groupKey: group, summary: 'Other' }).delivery, 'always');
+  // A code's title is never a rule key.
+  assert.equal(s.kindRuleKey({ groupKey: group, summary: 'Your code 123456', code: '123456' }), '');
+
+  delete s.rules['kind:' + group + '\u001fNag'];
+  s.rules['app:' + group] = { repeatLimit: 2 };
+  writes.length = 0;
+  for (let i = 0; i < 3; i++) s.handleNotification(s.fakeNotification(10 + i, 'Update available'));
+  assert.deepEqual(writes.filter(w => w[0] === 'close').map(w => w[2]), ['repeat'],
+                   'the third identical message is cleared');
 }
 
 { // Full quiet hides the entire recent list and held arrivals never backfill it.

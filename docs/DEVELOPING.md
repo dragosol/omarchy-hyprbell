@@ -1,4 +1,4 @@
-# Working on omapager
+# Working on hyprbell
 
 > Not called `AGENTS.md`, and not at the repository root, on purpose. Omarchy
 > installs a plugin's whole tree into `~/.config/omarchy/plugins/`, so a root
@@ -31,7 +31,7 @@ We won’t knowingly merge a broken or unsafe intermediate version. Required che
 | `DeedButton.qml` | one action on a card |
 | `Layout.js` | pure: rows in, placements out. No compositor needed to reason about it |
 | `Detect.js` `Markup.js` `Store.js` | pure: what a body is offering, what is safe to render, what to keep |
-| `bin/omapager-*` | Python helpers: store, icon resolution, KDE Connect bridge, demo |
+| `bin/hyprbell-*` | Python helpers: store, icon resolution, KDE Connect bridge, demo |
 
 Settings only reach a **bar widget**, never a service — so `Widget.applySettings()`
 reads `shell.json` and pushes values onto the daemon. That is the only path.
@@ -42,8 +42,8 @@ reads `shell.json` and pushes values onto the daemon. That is the only path.
 qmllint Service.qml            # CHECK THE EXIT CODE. Its stderr is easy to lose
                                # in a pipeline and a syntax error looks like silence
 omarchy-restart-shell          # reload
-omarchy-shell omapager probe   # what the daemon believes, as JSON
-bin/omapager-demo --list       # scenes; --scene routing prints its predictions first
+omarchy-shell hyprbell probe   # what the daemon believes, as JSON
+bin/hyprbell-demo --list       # scenes; --scene routing prints its predictions first
 ```
 
 `probe.notificationDisplays` lists the connected displays eligible to show
@@ -68,10 +68,10 @@ will tell you there are two when there are none.
 
 Almost everything is drivable without a pointer, which is how it gets tested:
 `expand`, `offer`, `act`, `reply`, `snooze`, `snoozeAll`, `codes`,
-`omapager.panel expand`, `omapager.panel line`. Add a verb rather than reaching
+`hyprbell.panel expand`, `hyprbell.panel line`. Add a verb rather than reaching
 for a screenshot.
 
-`omapager.panel line` reports the current status below the panel title without
+`hyprbell.panel line` reports the current status below the panel title without
 opening the panel. Use a stable status label rather than rotating phrases.
 
 Screenshots are a last resort: the panel dismisses on **any** click, so a user
@@ -81,7 +81,7 @@ Crop to the card and check a corner pixel is the card's own colour.
 ### Repeated close regression
 
 Enable `allowDefaultActionOnCardClick` in the isolated lab's widget settings
-for the default-action check, then run `bin/omapager-demo --scene close`. It
+for the default-action check, then run `bin/hyprbell-demo --scene close`. It
 creates three critical notifications from one source, each with a live default
 action. Hover the front card's close control and click it three times, waiting
 for each animation to settle without moving the pointer. The next card must
@@ -108,7 +108,7 @@ In an isolated lab, send critical notifications from two sources. Check
 when none is open. Switch between `source` and `all` with a stack open and
 repeat; an old open-stack key must not prevent dismissal. Press again during
 the exit animation: departing cards must not consume the next dismissal.
-`omapager clear` must still clear every stack. `node tests/security.cjs` covers
+`hyprbell clear` must still clear every stack. `node tests/security.cjs` covers
 deck selection, stale open keys, animation overlap and the empty state.
 
 ## Things that cost a day to learn
@@ -205,13 +205,13 @@ deck selection, stale open keys, animation overlap and the empty state.
 
 | | |
 | --- | --- |
-| `omapager` | the daemon |
-| `omapager.panel` | the panel |
+| `hyprbell` | the daemon |
+| `hyprbell.panel` | the panel |
 | `notifications` | **Omarchy's own**, answered here so the five stock `SUPER + ,` keybindings keep working when the built-in service is disabled. Names and return values are the built-in service's, not ours — do not rename them |
 
 ## State
 
-`~/.local/state/omarchy/omapager/` — `live/` (what is on screen, for restoring
+`~/.local/state/omarchy/hyprbell/` — `live/` (what is on screen, for restoring
 across a restart), `history/` (one file per notification), `icons/` (resolved
 per source), `quiet.json` (snoozes + silencing). It is state, not cache: it
 survives `rm -rf ~/.cache`.
@@ -223,7 +223,7 @@ at 60 days by `tidy`, which the daemon runs at startup.
 ## Security boundaries in this branch
 
 Read SECURITY.md and docs/SECURITY_ARCHITECTURE.md before editing capability
-paths. Security.js is the external-URL broker; `bin/omapager-action` separately
+paths. Security.js is the external-URL broker; `bin/hyprbell-action` separately
 brokers the two first-party local-file/crash actions. Never add direct desktop
 opens elsewhere, command shells, or automatic URL/action side effects.
 Notification labels are plain text; only sanitized body markup is
@@ -237,7 +237,7 @@ satty, swappy, omasnap) retain their bare-name, /usr/bin and /usr/local/bin poli
 Two additional actions accept only a bare name or /usr/bin spelling:
 
 - `xdg-open` accepts one absolute local file path, not a URL, option or traversal.
-  At activation `bin/omapager-action` requires an existing non-executable regular
+  At activation `bin/hyprbell-action` requires an existing non-executable regular
   file, rejects a final symlink and `.desktop` launcher, then calls the fixed
   `/usr/bin/xdg-open` with an encoded file URI. Spaces, Unicode and URI punctuation
   in filenames are preserved. The desktop app reopens the path, so this does not
@@ -282,7 +282,7 @@ verify held arrivals did not enter Recent while earlier entries become eligible.
 Also verify heading/chevron clicks toggle the list, reopening starts collapsed,
 and arrivals while collapsed do not reveal it.
 
-- **`bin/omapager-icon` fetches, through `bin/omapager_http.py`.** This is the
+- **`bin/hyprbell-icon` fetches, through `bin/hyprbell_http.py`.** This is the
   single network-security implementation for icon fetching; there is no second,
   competing HTTP client. `parse_url()` requires `http(s)`, a public-looking
   hostname, no userinfo and the scheme's default port only, and rejects control
@@ -313,8 +313,8 @@ and arrivals while collapsed do not reveal it.
 Adding anything that fetches, opens, or writes a path from notification text
 means extending one of these, not working around it.
 
-Use the `bin/omapager-run-*` wrappers. Helpers wait until Widget.applySettings has
-supplied `requireSandbox`; each launch receives OMAPAGER_REQUIRE_SANDBOX=0 or 1.
+Use the `bin/hyprbell-run-*` wrappers. Helpers wait until Widget.applySettings has
+supplied `requireSandbox`; each launch receives HYPRBELL_REQUIRE_SANDBOX=0 or 1.
 Auto mode prefers operational Bubblewrap, then direct execution if its preflight
 is unavailable. Required mode fails closed. Never replay a failed actual helper
 directly. Remote icons are automatic by default, use the pinned HTTPS transport,
@@ -393,7 +393,7 @@ controls, glyphs and metadata follow `Style.font.family`. Theme roles determine
 colours, padding and corners. Do not reintroduce minimum rounding, hand-tinted
 control states or extra card shadows.
 
-README media uses the curated `bin/omapager-demo` scenes: retain their names,
+README media uses the curated `bin/hyprbell-demo` scenes: retain their names,
 message text and recognisable source icons. Warm or provision the public icons
 before recording and inspect them in the rendered cards. Generic test fixtures
 and letter-tile loading states are not substitutes for the demo presentation.

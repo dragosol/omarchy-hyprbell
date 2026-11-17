@@ -37,7 +37,7 @@ def write_bytes(path, data):
     private_dir(path.parent)
     if path.is_symlink():
         raise ValueError('symlink file refused')
-    fd, temp = tempfile.mkstemp(prefix='.omapager-', dir=path.parent)
+    fd, temp = tempfile.mkstemp(prefix='.hyprbell-', dir=path.parent)
     try:
         with os.fdopen(fd, 'wb') as f:
             f.write(data)

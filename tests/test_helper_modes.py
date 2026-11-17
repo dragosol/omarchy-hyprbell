@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "bin"))
 
 def load_runner():
     name = "helper_modes_runner"
-    loader = importlib.machinery.SourceFileLoader(name, str(ROOT / "bin/omapager-run-helper"))
+    loader = importlib.machinery.SourceFileLoader(name, str(ROOT / "bin/hyprbell-run-helper"))
     spec = importlib.util.spec_from_loader(name, loader)
     runner = importlib.util.module_from_spec(spec)
     loader.exec_module(runner)
@@ -51,12 +51,12 @@ def stdin_bytes(payload):
 class HelperModes(unittest.TestCase):
     def setUp(self):
         self.runner = load_runner()
-        self.temp = tempfile.TemporaryDirectory(prefix="omapager-helper-modes-")
+        self.temp = tempfile.TemporaryDirectory(prefix="hyprbell-helper-modes-")
         self.root = Path(self.temp.name)
         self.home = self.root / "home"
         self.home.mkdir()
         self.runner.HOME_DIR = self.home
-        self.runner.STATE = self.home / ".local/state/omarchy/omapager"
+        self.runner.STATE = self.home / ".local/state/omarchy/hyprbell"
 
     def tearDown(self):
         self.temp.cleanup()
@@ -97,7 +97,7 @@ class HelperModes(unittest.TestCase):
         self.assertFalse(self.runner.STATE.exists())
 
     def test_status_main_treats_absent_policy_as_opportunistic(self):
-        with patch.object(sys, "argv", [str(ROOT / "bin/omapager-run-helper")]), \
+        with patch.object(sys, "argv", [str(ROOT / "bin/hyprbell-run-helper")]), \
                 patch.object(self.runner, "bubblewrap_path", return_value=None), \
                 contextlib.redirect_stdout(io.StringIO()) as stdout:
             result = self.runner.main(["status"], {})
@@ -106,11 +106,11 @@ class HelperModes(unittest.TestCase):
         self.assertTrue(json.loads(stdout.getvalue())["unsandboxedFallback"])
 
     def test_malformed_policy_is_rejected_before_status_probe(self):
-        with patch.object(sys, "argv", [str(ROOT / "bin/omapager-run-helper"), "status"]), \
+        with patch.object(sys, "argv", [str(ROOT / "bin/hyprbell-run-helper"), "status"]), \
                 patch.object(self.runner, "mode_status") as status, \
                 contextlib.redirect_stdout(io.StringIO()) as stdout, \
                 contextlib.redirect_stderr(io.StringIO()):
-            result = self.runner.main(["status"], {"OMAPAGER_REQUIRE_SANDBOX": "yes"})
+            result = self.runner.main(["status"], {"HYPRBELL_REQUIRE_SANDBOX": "yes"})
         self.assertEqual(result, 1)
         self.assertEqual(stdout.getvalue(), "")
         status.assert_not_called()
@@ -119,7 +119,7 @@ class HelperModes(unittest.TestCase):
         plugin = self.root / "plugin"
         bindir = plugin / "bin"
         bindir.mkdir(parents=True)
-        helper = bindir / "omapager-store"
+        helper = bindir / "hyprbell-store"
         helper.write_text(
             "import json, os, sys\n"
             "from pathlib import Path\n"
@@ -134,7 +134,7 @@ class HelperModes(unittest.TestCase):
             "    'bad': sorted(k for k in (\n"
             "        'PYTHONPATH', 'LD_PRELOAD', 'AWS_SECRET_ACCESS_KEY',\n"
             "        'http_proxy', 'HTTPS_PROXY', 'XDG_CONFIG_HOME',\n"
-            "        'OMAPAGER_REQUIRE_SANDBOX'\n"
+            "        'HYPRBELL_REQUIRE_SANDBOX'\n"
             "    ) if k in os.environ),\n"
             "}))\n"
             "raise SystemExit(int(sys.argv[2]))\n"
@@ -146,7 +146,7 @@ class HelperModes(unittest.TestCase):
         self.make_effect_helper()
         effect = self.root / ("missing.json" if bwrap is None else "broken.json")
         source_environment = {
-            "OMAPAGER_REQUIRE_SANDBOX": "0",
+            "HYPRBELL_REQUIRE_SANDBOX": "0",
             "PYTHONPATH": "/attacker",
             "LD_PRELOAD": "/attacker/library.so",
             "AWS_SECRET_ACCESS_KEY": "secret",
@@ -155,7 +155,7 @@ class HelperModes(unittest.TestCase):
             "XDG_CONFIG_HOME": "/attacker/config",
         }
         probe_value = False
-        with patch.object(sys, "argv", [str(ROOT / "bin/omapager-run-helper")]), \
+        with patch.object(sys, "argv", [str(ROOT / "bin/hyprbell-run-helper")]), \
                 patch.object(self.runner, "bubblewrap_path", return_value=bwrap), \
                 patch.object(self.runner, "probe_sandbox", return_value=probe_value) as probe, \
                 stdin_bytes(b"preserved stdin"):
@@ -183,12 +183,12 @@ class HelperModes(unittest.TestCase):
         for bwrap in (None, "/usr/bin/bwrap"):
             effect = self.root / ("required-missing.json" if bwrap is None else "required-broken.json")
             with self.subTest(bwrap=bwrap), \
-                    patch.object(sys, "argv", [str(ROOT / "bin/omapager-run-helper")]), \
+                    patch.object(sys, "argv", [str(ROOT / "bin/hyprbell-run-helper")]), \
                     patch.object(self.runner, "bubblewrap_path", return_value=bwrap), \
                     patch.object(self.runner, "probe_sandbox", return_value=False) as probe, \
                     contextlib.redirect_stderr(io.StringIO()):
                 result = self.runner.main(["store", str(effect), "0"],
-                                          {"OMAPAGER_REQUIRE_SANDBOX": "1"})
+                                          {"HYPRBELL_REQUIRE_SANDBOX": "1"})
             self.assertEqual(result, 1)
             self.assertFalse(effect.exists())
             self.assertEqual(probe.call_count, 1 if bwrap else 0)
@@ -198,12 +198,12 @@ class HelperModes(unittest.TestCase):
         effect = self.root / "failed-sandbox.json"
         args = [str(effect), "23"]
         sandbox_argv = self.runner.direct_command("store", args)
-        with patch.object(sys, "argv", [str(ROOT / "bin/omapager-run-helper")]), \
+        with patch.object(sys, "argv", [str(ROOT / "bin/hyprbell-run-helper")]), \
                 patch.object(self.runner, "bubblewrap_path", return_value="/usr/bin/bwrap"), \
                 patch.object(self.runner, "probe_sandbox", return_value=True), \
                 patch.object(self.runner, "sandbox_command", return_value=sandbox_argv), \
                 stdin_bytes(b""):
-            result = self.runner.main(["store", *args], {"OMAPAGER_REQUIRE_SANDBOX": "0"})
+            result = self.runner.main(["store", *args], {"HYPRBELL_REQUIRE_SANDBOX": "0"})
         self.assertEqual(result, 23)
         self.assertEqual(json.loads(effect.read_text())["count"], 1)
 
@@ -230,7 +230,7 @@ class HelperModes(unittest.TestCase):
             "    time.sleep(.01)\n"
             "time.sleep(30)\n"
         )
-        wrapper = str(ROOT / "bin/omapager-run-helper")
+        wrapper = str(ROOT / "bin/hyprbell-run-helper")
         harness_code = (
             "import importlib.machinery, importlib.util, signal, sys\n"
             f"sys.path.insert(0, {str(ROOT / 'bin')!r})\n"

@@ -8,12 +8,12 @@ All profiles: fresh namespaces, dropped capabilities, read-only /usr and project
 source, private /tmp and HOME, minimal environment, private process view, no host
 SSH/GPG/Documents/other projects/browser profiles. CPU/address-space/file-size and
 45-second wall-time limits bound helper failure. The project source is mounted at
-/opt/omapager, not its surrounding Projects folder. Linux user namespace policy
+/opt/hyprbell, not its surrounding Projects folder. Linux user namespace policy
 must permit Bubblewrap; missing/blocked Bubblewrap causes helper failure.
 
 | Helper | Writable | Extra read-only | Network |
 | --- | --- | --- | --- |
-| store | Omapager state only | Runtime and own code | Isolated |
+| store | Hyprbell state only | Runtime and own code | Isolated |
 | icon | State/icons only | System/user icon and application dirs, configured icon overrides | Isolated unless --fetch |
 | KDE | None | Only user bus socket, runtime and own code | Network namespace isolated; session D-Bus socket exposed |
 
@@ -27,8 +27,8 @@ than assuming `/run/user/<uid>/bus`. Missing, abstract, TCP and multi-address
 forms fail closed; no host-bus fallback is attempted. The selected path must
 be an existing absolute Unix socket.
 
-Run `bin/omapager-run-helper status` for an actual lightweight namespace check.
-`omapager probe` reports that check, required policy and absence of fallback.
+Run `bin/hyprbell-run-helper status` for an actual lightweight namespace check.
+`hyprbell probe` reports that check, required policy and absence of fallback.
 Run `python3 tests/sandbox.py` on an ordinary Linux host to prove synthetic HOME
 secrets cannot be read, network connections fail and scoped writes succeed.
 Nested agent/container sandboxes may block namespace creation; that is a test

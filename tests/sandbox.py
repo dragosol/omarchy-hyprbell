@@ -15,12 +15,12 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 import sys
 sys.path.insert(0,str(ROOT/'bin'))
-loader=importlib.machinery.SourceFileLoader('runner',str(ROOT/'bin/omapager-run-helper'))
+loader=importlib.machinery.SourceFileLoader('runner',str(ROOT/'bin/hyprbell-run-helper'))
 spec=importlib.util.spec_from_loader('runner',loader)
 r=importlib.util.module_from_spec(spec);loader.exec_module(r)
-with tempfile.TemporaryDirectory(prefix='omapager-sandbox-') as tmp:
+with tempfile.TemporaryDirectory(prefix='hyprbell-sandbox-') as tmp:
     r.HOME_DIR=Path(tmp)/'home';r.HOME_DIR.mkdir()
-    r.STATE=r.HOME_DIR/'.local/state/omarchy/omapager'
+    r.STATE=r.HOME_DIR/'.local/state/omarchy/hyprbell'
     bwrap=r.bubblewrap_path();assert bwrap
     secret=r.HOME_DIR/'.ssh/id_test';secret.parent.mkdir();secret.write_text('synthetic secret')
     for kind in ('store','icon'):
@@ -63,7 +63,7 @@ assert not Path('/run/user/{os.getuid()}/bus').exists()
                        check=True, timeout=10)
         for args, readable, writable in [
             (['find', 'Chat'], False, False),
-            (['find', 'Omapager reply demo'], True, False),
+            (['find', 'Hyprbell reply demo'], True, False),
             (['reply', 'demo:' + 'a' * 32], True, True),
         ]:
             with patch.dict(os.environ, {'DBUS_SESSION_BUS_ADDRESS': address,
@@ -117,5 +117,5 @@ else:
         else:
             raise AssertionError('required mode executed without an operational sandbox')
     with contextlib.redirect_stderr(io.StringIO()):
-        assert r.main(['status'], {'OMAPAGER_REQUIRE_SANDBOX': 'invalid'}) == 1
+        assert r.main(['status'], {'HYPRBELL_REQUIRE_SANDBOX': 'invalid'}) == 1
 print('sandbox: namespaces, scoped mounts, direct fallback, required blocking and clean environment passed')

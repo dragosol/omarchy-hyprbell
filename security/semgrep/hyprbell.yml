@@ -29,4 +29,4 @@ rules:
       - pattern: $RESP.read()
       - pattern: $RESP.read1()
     paths:
-      include: [/bin/omapager_http.py]
+      include: [/bin/hyprbell_http.py]

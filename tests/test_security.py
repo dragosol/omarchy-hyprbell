@@ -16,8 +16,8 @@ from unittest.mock import patch, MagicMock
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'bin'))
-import omapager_http as net
-import omapager_files as files
+import hyprbell_http as net
+import hyprbell_files as files
 
 def module(name):
     loader=importlib.machinery.SourceFileLoader(name,str(ROOT/'bin'/name))
@@ -30,7 +30,7 @@ class Storage(unittest.TestCase):
         self.env=dict(os.environ,HOME=str(self.home),PYTHONDONTWRITEBYTECODE='1')
     def tearDown(self): self.tmp.cleanup()
     def run_store(self,*args,payload=None):
-        return subprocess.run([sys.executable,str(ROOT/'bin/omapager-store'),*args],input=json.dumps(payload) if payload is not None else '',text=True,capture_output=True,env=self.env)
+        return subprocess.run([sys.executable,str(ROOT/'bin/hyprbell-store'),*args],input=json.dumps(payload) if payload is not None else '',text=True,capture_output=True,env=self.env)
     def test_explicit_code_flags_redact_whole_row(self):
         for flag in ('code', 'codes'):
             entry = {'key': flag, flag: '938271', 'app': '938271',
@@ -43,7 +43,7 @@ class Storage(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual({row['key']: row['body'] for row in json.loads(result.stdout)},
                          {'code': '[redacted]', 'codes': '[redacted]'})
-        history = self.home/'.local/state/omarchy/omapager/history'
+        history = self.home/'.local/state/omarchy/hyprbell/history'
         for path in history.glob('*.json'):
             row = json.loads(path.read_text())
             self.assertEqual(row['summary'], 'Verification notification')
@@ -51,7 +51,7 @@ class Storage(unittest.TestCase):
             for secret in ('938271', '&#57;38271', '938 271', '/etc/passwd'):
                 self.assertNotIn(secret, path.read_text())
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-        self.assertEqual((self.home/'.local/state/omarchy/omapager').stat().st_mode & 0o777, 0o700)
+        self.assertEqual((self.home/'.local/state/omarchy/hyprbell').stat().st_mode & 0o777, 0o700)
     def test_exec_argv_is_not_persisted(self):
         entry = {
             'key': 'shot',
@@ -77,7 +77,7 @@ class Storage(unittest.TestCase):
     def test_symlink_and_oversize(self):
         self.run_store('restore')
         victim=self.home/'victim';victim.write_text('untouched')
-        live=self.home/'.local/state/omarchy/omapager/live'
+        live=self.home/'.local/state/omarchy/hyprbell/live'
         (live/'n1.json').symlink_to(victim)
         self.assertNotEqual(self.run_store('put',payload={'key':'n1','body':'x'}).returncode,0)
         self.assertEqual(victim.read_text(),'untouched')
@@ -86,7 +86,7 @@ class Storage(unittest.TestCase):
     def test_directory_symlink(self):
         root=self.home/'.local/state/omarchy';root.mkdir(parents=True)
         target=self.home/'victim';target.mkdir()
-        (root/'omapager').symlink_to(target,target_is_directory=True)
+        (root/'hyprbell').symlink_to(target,target_is_directory=True)
         self.assertNotEqual(self.run_store('put',payload={'key':'n1'}).returncode,0)
         self.assertEqual(list(target.iterdir()),[])
     def test_numbered_ordinary_notifications_survive_put_and_legacy_reads(self):
@@ -102,7 +102,7 @@ class Storage(unittest.TestCase):
             ('Settings', 'PIN configuration updated', 'Settings saved'),
         ]
         self.assertEqual(self.run_store('restore').returncode, 0)
-        state = self.home/'.local/state/omarchy/omapager'
+        state = self.home/'.local/state/omarchy/hyprbell'
         stamp = int(time.time() * 1000)
         for i, (app, summary, body) in enumerate(cases):
             # Real production rows carry numbered keys and derived lowercase
@@ -150,7 +150,7 @@ class Storage(unittest.TestCase):
             {'rawBody': 'Your OTP is 938\n271', 'body': 'Open the app'},
         ]
         self.assertEqual(self.run_store('restore').returncode, 0)
-        state = self.home/'.local/state/omarchy/omapager'
+        state = self.home/'.local/state/omarchy/hyprbell'
         stamp = int(time.time() * 1000)
         for mode in ('put', 'legacy-live', 'legacy-history'):
             expected = {}
@@ -221,7 +221,7 @@ class Network(unittest.TestCase):
         conn.close.assert_called_once()
 
 class Replies(unittest.TestCase):
-    def setUp(self):self.k=module('omapager-kdeconnect')
+    def setUp(self):self.k=module('hyprbell-kdeconnect')
     def test_ambiguous_and_empty(self):
         a=dict(appName='Chat',text='hello',ticker='',replyId='1',path='/modules/kdeconnect/devices/device/notifications/1')
         with patch.object(self.k,'listing',return_value=[a,a]):self.assertIsNone(self.k.find('Chat','hello'))
@@ -287,10 +287,10 @@ class Replies(unittest.TestCase):
             for arg in argv:
                 self.assertNotIn(body,str(arg),f'body leaked into argv: {argv}')
     def test_replayed_notification_text_never_reaches_a_command_line(self):
-        """`omapager-demo --replay` reads real stored notifications and sends them again, so
+        """`hyprbell-demo --replay` reads real stored notifications and sends them again, so
         the same property the reply path has must hold here: the summary and body must never
         appear on a command line. This is the property, not the mechanism."""
-        demo=module('omapager-demo')
+        demo=module('hyprbell-demo')
         summary='PrivateSummary77'
         body='PrivateReplayBody88'
         seen=[]
@@ -319,7 +319,7 @@ class Replies(unittest.TestCase):
     def test_demo_refuses_to_send_without_the_bus(self):
         """Without python-gobject there is no way to post a notification except by putting
         its text on a command line, so it must refuse rather than fall back to one."""
-        demo=module('omapager-demo')
+        demo=module('hyprbell-demo')
         seen=[]
         def record(argv,*a,**k):
             seen.append(list(argv))
@@ -335,7 +335,7 @@ class Replies(unittest.TestCase):
     def test_demo_sends_no_notification_through_a_subprocess(self):
         """The whole mechanism, read off the source: nothing in the demo may hand notification
         text to notify-send, whose arguments are world-readable."""
-        source=(ROOT/'bin'/'omapager-demo').read_text()
+        source=(ROOT/'bin'/'hyprbell-demo').read_text()
         # the name is still allowed as a fallback *app* name, which is what an unnamed sender
         # shows up as; what must not come back is it heading a command list.
         import re as _re
@@ -343,7 +343,7 @@ class Replies(unittest.TestCase):
             if line.strip().startswith('#'):
                 continue
             self.assertIsNone(_re.search(r'\[\s*[\'"]notify-send[\'"]',line),
-                              f'omapager-demo:{n} builds a notify-send command line: {line.strip()}')
+                              f'hyprbell-demo:{n} builds a notify-send command line: {line.strip()}')
 
     def test_demo_cannot_impersonate_a_real_phone_app(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -352,9 +352,9 @@ class Replies(unittest.TestCase):
                                       'appName': 'WhatsApp', 'title': 'Demo sender', 'text': 'hello'})
             with patch.object(self.k, 'FIXTURE', fixture), patch.object(self.k, 'listing', return_value=[]):
                 self.assertIsNone(self.k.find('WhatsApp', 'Demo sender: hello'))
-                note = self.k.find('Omapager reply demo', 'Demo sender: hello')
+                note = self.k.find('Hyprbell reply demo', 'Demo sender: hello')
                 self.assertIsNotNone(note)
-                self.assertEqual(note['appName'], 'Omapager reply demo')
+                self.assertEqual(note['appName'], 'Hyprbell reply demo')
 
     def test_demo_rejects_replaced_and_expired_sessions(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -364,29 +364,29 @@ class Replies(unittest.TestCase):
             files.write_json(fixture, current)
             with patch.object(self.k, 'FIXTURE', fixture), patch.object(self.k, 'REPLY_LOG', reply), \
                     patch.object(self.k, 'listing', return_value=[]):
-                original = self.k.find('Omapager reply demo', 'Demo sender: hello')
+                original = self.k.find('Hyprbell reply demo', 'Demo sender: hello')
                 self.assertIsNotNone(original)
                 current['token'] = 'b' * 32
                 files.write_json(fixture, current)
                 with patch.object(sys, 'argv', ['helper', 'reply', original['path']]), \
                         patch.object(sys, 'stdin', io.StringIO(json.dumps(
-                            {'text': 'must not be sent', 'source': 'Omapager reply demo',
+                            {'text': 'must not be sent', 'source': 'Hyprbell reply demo',
                              'body': 'Demo sender: hello'}))):
                     self.assertEqual(self.k.main(), 1)
                 self.assertFalse(reply.exists())
                 current['created'] = time.time() - self.k.FIXTURE_MAX_AGE - 1
                 files.write_json(fixture, current)
-                self.assertIsNone(self.k.find('Omapager reply demo', 'Demo sender: hello'))
+                self.assertIsNone(self.k.find('Hyprbell reply demo', 'Demo sender: hello'))
 
 class Icons(unittest.TestCase):
     def test_icon_hint_traversal(self):
-        icon=module('omapager-icon')
+        icon=module('hyprbell-icon')
         with patch.object(icon.glob,'glob',return_value=[]) as glob:
             icon.from_icon_theme(['../../../../etc/passwd','/etc/passwd','*','--help'])
             for call in glob.call_args_list:
                 self.assertNotIn('../',call.args[0])
     def test_svg_rejected(self):
-        icon=module('omapager-icon')
+        icon=module('hyprbell-icon')
         with tempfile.TemporaryDirectory() as temp,patch.object(icon,'CACHE',temp),patch.object(icon,'get',return_value=(b'<svg xmlns="http://www.w3.org/2000/svg"></svg>','https://example.com')):
             self.assertIsNone(icon.fetch_site('example.com','dark'))
             self.assertEqual(list(Path(temp).iterdir()),[])
@@ -398,7 +398,7 @@ class Icons(unittest.TestCase):
     # now requires a cache hit to be exactly the validated raster this code
     # itself would have produced.
     def test_review_p2_legacy_remote_svg_cache_rejected(self):
-        icon=module('omapager-icon')
+        icon=module('hyprbell-icon')
         with tempfile.TemporaryDirectory() as temp:
             legacy=os.path.join(temp,'web-example-com-dark.svg')
             with open(legacy,'w') as f:
@@ -422,7 +422,7 @@ class Icons(unittest.TestCase):
     def test_review_p2_local_theme_svg_preserved(self):
         # A trusted local theme SVG is a completely separate path
         # (from_icon_theme) and must be unaffected by remote-cache hardening.
-        icon=module('omapager-icon')
+        icon=module('hyprbell-icon')
         with tempfile.TemporaryDirectory() as temp:
             theme_dir=os.path.join(temp,'hicolor','scalable','apps')
             os.makedirs(theme_dir)
@@ -438,7 +438,7 @@ class Raster(unittest.TestCase):
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow not installed; run locked scanner/test environment")
-        icon=module('omapager-icon')
+        icon=module('hyprbell-icon')
         for size,accepted in [((256,256),True),((2049,1),False)]:
             buf=io.BytesIO();Image.new('RGB',size).save(buf,format='PNG')
             with tempfile.TemporaryDirectory() as temp,patch.object(icon,'CACHE',temp),patch.object(icon,'get',return_value=(buf.getvalue(),'https://example.com')):

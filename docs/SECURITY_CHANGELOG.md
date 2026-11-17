@@ -1,6 +1,20 @@
 # Security changelog
 
-## Omapager Pro
+## Hyprbell (formerly Omapager Pro)
+
+- Renamed to Hyprbell: new plugin id, IPC target, layer namespace and
+  state directory. `hyprbell-run-helper` moves the old state and icon folders
+  across once, outside the sandbox, only when nothing exists at the new path
+  and the old one is a real directory, never a symlink.
+- 1.5.0, the right-click menu. Two new things are kept on disk, both in the
+  existing private state directory: rules, in `quiet.json` beside the snoozes,
+  and "notify later" copies under `later/`. A later copy goes through the
+  store's own `sanitise()` (codes redacted, no actions, links or reply
+  handles), the same as history, and is deleted when it is shown. A rule for
+  one kind of message is keyed by its title, so a notification carrying a
+  verification code is never offered that scope: its title can hold the code.
+  The menu is a separate popup with a Hyprland focus grab, held only while it
+  is open, so the notification layer still never takes the keyboard otherwise.
 
 - `omapager-demo` posts notifications over the session bus instead of spawning
   `notify-send`. `--replay` re-sends real stored notifications, and

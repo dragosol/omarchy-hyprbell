@@ -9,8 +9,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN_HELPER = ROOT / "bin/omapager-run-helper"
-RUN_ICON = ROOT / "bin/omapager-run-icon"
+RUN_HELPER = ROOT / "bin/hyprbell-run-helper"
+RUN_ICON = ROOT / "bin/hyprbell-run-icon"
 DATA_URL_PREFIX = "data:image/png;base64,"
 
 
@@ -24,7 +24,7 @@ class SenderImage(unittest.TestCase):
         cls.Image = Image
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="omapager-sender-image-")
+        self.temp = tempfile.TemporaryDirectory(prefix="hyprbell-sender-image-")
         self.root = Path(self.temp.name)
         self.home = self.root / "home"
         self.inputs = self.root / "inputs"
@@ -40,7 +40,7 @@ class SenderImage(unittest.TestCase):
             "LANG": "C.UTF-8",
             "PATH": "/usr/bin",
             "PYTHONDONTWRITEBYTECODE": "1",
-            "OMAPAGER_REQUIRE_SANDBOX": required,
+            "HYPRBELL_REQUIRE_SANDBOX": required,
         }
 
     def mode_status(self):

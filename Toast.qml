@@ -243,7 +243,18 @@ Item {
     }
   }
   property bool deedsOpen: false
+  // The inline menu this card used to draw for a right-click is now the
+  // service's ContextMenu, a popup of its own; this stays false.
   property bool menuOpen: false
+  // This card's ContextMenu is up: hold its hover look while the pointer is
+  // over the menu instead.
+  property bool menuShown: false
+  // Right-click: where, in the window's coordinates, for the menu to open at.
+  signal menuRequested(real x, real y)
+  function requestMenu(item, x, y) {
+    var p = item.mapToItem(null, x, y)
+    menuRequested(p.x, p.y)
+  }
   property string actionsAlign: "right"      // right | left
 
   // Right-clicking a card asks about the source rather than about the message:
@@ -495,7 +506,7 @@ Item {
                    ? value : "file://" + value
           }
 
-          // What the sender handed over, and what omapager-icon resolved for
+          // What the sender handed over, and what hyprbell-icon resolved for
           // this source. Nothing else: Quickshell.iconPath happily returns a
           // provider URL for an icon that does not exist, and that draws as a
           // checkerboard.
@@ -712,7 +723,7 @@ Item {
                   visible: opacity > 0.01
                   Behavior on opacity { NumberAnimation { duration: card.fade } }
                   onClicked: card.dismissed()
-                  onRightClicked: card.menuOpen = !card.menuOpen
+                  onRightClicked: card.requestMenu(shut, shut.width / 2, shut.height)
                 }
               }
             }
@@ -1096,6 +1107,7 @@ Item {
       // a click still let it fall through to here, so click-to-open keeps
       // working everywhere except on an actual button.
       MouseArea {
+        id: cardClicks
         anchors.fill: parent
         z: -1
         // Deliberately NOT hoverEnabled: hover goes to the topmost item that
@@ -1106,11 +1118,7 @@ Item {
         cursorShape: Qt.PointingHandCursor
 
         onClicked: function(mouse) {
-          if (mouse.button === Qt.RightButton) { card.menuOpen = !card.menuOpen; return }
-          // With the menu open, a click anywhere else on the card is a way out
-          // of it rather than a way into the app - the surface takes no keyboard
-          // focus while it is open, so Escape never reaches us.
-          if (card.menuOpen) { card.menuOpen = false; return }
+          if (mouse.button === Qt.RightButton) { card.requestMenu(cardClicks, mouse.x, mouse.y); return }
           if (mouse.button === Qt.MiddleButton) card.dismissed()
           else card.activated()
         }

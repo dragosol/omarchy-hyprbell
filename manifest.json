@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.dragosol.omapager-pro",
-  "name": "Omapager Pro",
-  "version": "1.4.6",
+  "id": "io.github.dragosol.hyprbell",
+  "name": "Hyprbell",
+  "version": "1.5.0",
   "author": "Dragos Robu (fork of Omapager by Neil Jagdish Patel)",
   "license": "MIT",
-  "description": "Revamped, full-featured notifications for Omarchy. Swipe a notification away with two fingers or the mouse, pull in everything you missed from the touchpad's edge or the top-right corner, and browse stacks that open as you point at them, in a minimalist design that matches your window borders.",
+  "description": "Revamped, full-featured notifications for Omarchy. Swipe a notification away with two fingers or the mouse, pull in everything you missed from the touchpad's edge or the top-right corner, and right-click any notification for rules: never, silent or always, clear repeats or old ones, notify me later. Formerly Omapager Pro.",
   "kinds": [
     "service",
     "bar-widget"

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-# omapager-demo - a realistic run of notifications, for looking at the thing.
+# hyprbell-demo - a realistic run of notifications, for looking at the thing.
 #
-#   omapager-demo              the default scene, paced for watching
-#   omapager-demo --fast       same scene, tighter, for a recording
-#   omapager-demo --scene chat only one part of it
-#   omapager-demo --scene interactive   codes, links and the sender's buttons
-#   omapager-demo --scene routing       where a click sends you, per source
-#   omapager-demo --scene reply         inline reply, against a stand-in phone
-#   omapager-demo --scene close         repeated dismissals without moving the pointer
-#   omapager-demo --list       what scenes there are
-#   omapager-demo --loop       keep going until interrupted
+#   hyprbell-demo              the default scene, paced for watching
+#   hyprbell-demo --fast       same scene, tighter, for a recording
+#   hyprbell-demo --scene chat only one part of it
+#   hyprbell-demo --scene interactive   codes, links and the sender's buttons
+#   hyprbell-demo --scene routing       where a click sends you, per source
+#   hyprbell-demo --scene reply         inline reply, against a stand-in phone
+#   hyprbell-demo --scene close         repeated dismissals without moving the pointer
+#   hyprbell-demo --list       what scenes there are
+#   hyprbell-demo --loop       keep going until interrupted
 #
 # The senders here are the ones that actually notify this desktop - Chrome
 # announcing a web app through a leading anchor, KDE Connect naming a device in
@@ -25,9 +25,9 @@ import selectors
 import subprocess
 import sys
 import time
-from omapager_files import write_json
+from hyprbell_files import write_json
 
-STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "omapager-run-store")
+STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hyprbell-run-store")
 
 # Chrome puts a link to the origin on the front of every web notification, and
 # that anchor is what tells app.slack.com apart from mail.google.com.
@@ -144,13 +144,13 @@ SCENES = {
     # whatever it served that week.
     "x": [
         dict(web="x.com", image="x.png", summary="Trending in Linux",
-             body="#OmapagerPro \u00b7 1,204 posts", gap=0.6),
+             body="#Hyprbell \u00b7 1,204 posts", gap=0.6),
         dict(web="x.com", image="x.png", summary="@wayland_wendy followed you",
              body="Wendy builds compositors for fun and ships them on Fridays", gap=0.6),
         dict(web="x.com", image="x.png", summary="@rice_daily quoted your post",
              body="notification centre on linux finally feels native. swipe in from the edge, swipe away with two fingers", gap=0.6),
         dict(web="x.com", image="x.png", summary="52 people liked your post",
-             body="\u201cOmapager Pro: two fingers from the right edge pulls in everything you missed\u201d", gap=0.6),
+             body="\u201cHyprbell: two fingers from the right edge pulls in everything you missed\u201d", gap=0.6),
         dict(web="x.com", image="x.png", summary="@tilingwm_tom replied",
              body="wait, the panel follows your fingers?? how", gap=0.6),
         dict(web="x.com", image="x.png", summary="@hyprnerd reposted your post",
@@ -167,7 +167,7 @@ SCENES = {
         dict(web="open.spotify.com", summary="Now playing",
              body="Money for Nothing \u00b7 Dire Straits", gap=0.5),
         dict(web="github.com", summary="Review requested",
-             body="dragosol/omarchy-omapager-pro #42 \u00b7 <b>swipe a stack away in one go</b>", gap=0.5),
+             body="dragosol/omarchy-hyprbell #42 \u00b7 <b>swipe a stack away in one go</b>", gap=0.5),
         dict(web="linear.app", summary="OMA-218 assigned to you",
              body="Panel should follow the fingers when it opens from the edge", gap=0.5),
         dict(web="calendar.google.com", summary="Design review in 5 minutes",
@@ -183,7 +183,7 @@ SCENES = {
         dict(web="app.slack.com", summary="#design", gap=0.5,
              body="Gurbinder: shipping it before standup"),
         dict(web="x.com", image="x.png", summary="52 people liked your post", gap=0.4,
-             body="\u201cOmapager Pro: two fingers from the right edge pulls in everything you missed\u201d"),
+             body="\u201cHyprbell: two fingers from the right edge pulls in everything you missed\u201d"),
         dict(web="x.com", image="x.png", summary="@tilingwm_tom replied", gap=0.4,
              body="wait, the panel follows your fingers?? how"),
         dict(web="x.com", image="x.png", summary="@hyprnerd reposted your post", gap=0.4,
@@ -235,7 +235,7 @@ def scheme():
     return "dark"
 
 
-ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "omapager-run-icon")
+ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hyprbell-run-icon")
 
 def bounded_output(command, limit=65536, timeout=5, env=None):
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env) as proc:
@@ -272,7 +272,7 @@ def helper_policy():
     # shell.json; an unavailable/pending policy must not bypass required mode.
     fetch, required = False, True
     try:
-        probe = json.loads(bounded_output(["omarchy-shell", "omapager", "probe"]))
+        probe = json.loads(bounded_output(["omarchy-shell", "hyprbell", "probe"]))
         security = probe.get("security", {})
         if (security.get("mode") in ("sandboxed", "direct", "blocked")
                 and isinstance(security.get("required"), bool)
@@ -280,7 +280,7 @@ def helper_policy():
             fetch, required = probe["fetchRemoteIcons"], security["required"]
     except (OSError, ValueError, TimeoutError, subprocess.TimeoutExpired):
         pass
-    return fetch, dict(os.environ, OMAPAGER_REQUIRE_SANDBOX="1" if required else "0")
+    return fetch, dict(os.environ, HYPRBELL_REQUIRE_SANDBOX="1" if required else "0")
 
 
 def warm(items):
@@ -501,7 +501,7 @@ def routing_scene():
 
 # Match the helper sandbox's private state root, independently of XDG overrides.
 DEMO_STATE = os.path.join(os.path.expanduser("~/.local/state"),
-                          "omarchy", "omapager", "reply-demo")
+                          "omarchy", "hyprbell", "reply-demo")
 DEMO_FIXTURE = os.path.join(DEMO_STATE, "notification.json")
 DEMO_REPLY = os.path.join(DEMO_STATE, "reply.json")
 
@@ -511,12 +511,12 @@ def reply_scene():
     who, message = "Seif Lotfy", "did you get the build working in the end?"
     write_json(DEMO_FIXTURE, dict(token=secrets.token_hex(16), created=time.time(),
                                  title=who, text=message))
-    return [dict(app="KDE Connect", icon="whatsapp", summary="Omapager reply demo",
+    return [dict(app="KDE Connect", icon="whatsapp", summary="Hyprbell reply demo",
                  body="%s: %s" % (who, message))]
 
 
 def clear():
-    subprocess.run(["omarchy-shell", "-q", "omapager", "clear"], check=False)
+    subprocess.run(["omarchy-shell", "-q", "hyprbell", "clear"], check=False)
 
 
 def run(scenes, gap, timeout, shuffle):

@@ -8,8 +8,8 @@ ROOT=Path(__file__).resolve().parents[1]
 errors=[]
 # Omarchy plugin validation rejects symlinks anywhere inside a plugin
 # directory, and this whole repository is the plugin folder `omarchy plugin
-# add <git-url>` clones. A committed symlink (bin/omapager-run-icon used to
-# alias bin/omapager-run-helper this way) installs cleanly by hand but fails
+# add <git-url>` clones. A committed symlink (bin/hyprbell-run-icon used to
+# alias bin/hyprbell-run-helper this way) installs cleanly by hand but fails
 # that validator, blocking the documented git-install path. Check what git
 # actually tracks, since that is what a fresh clone ships.
 tracked=subprocess.run(['git','-C',str(ROOT),'ls-files','-s'],capture_output=True,text=True,check=True).stdout
@@ -30,7 +30,7 @@ for path in [*ROOT.glob('*.qml'),*ROOT.glob('*.js'),*(ROOT/'bin').glob('*')]:
             if isinstance(n,ast.Call):
                 name=ast.unparse(n.func)
                 if name=='os.system' or any(k.arg=='shell' and isinstance(k.value,ast.Constant) and k.value.value for k in n.keywords):errors.append(rel+': shell execution')
-                if rel=='bin/omapager_http.py' and name.endswith(('.read','.read1')) and not n.args:errors.append(rel+': unbounded network read')
+                if rel=='bin/hyprbell_http.py' and name.endswith(('.read','.read1')) and not n.args:errors.append(rel+': unbounded network read')
 for path in (ROOT/'.github/workflows').glob('*.yml'):
     text=path.read_text()
     for use in re.findall(r'uses:\s*([^\s#]+)',text):
@@ -38,8 +38,8 @@ for path in (ROOT/'.github/workflows').glob('*.yml'):
     if 'pull_request_target' in text or 'secrets.' in text:errors.append(str(path)+': privileged PR context')
 service=(ROOT/'Service.qml').read_text()
 for helper in ('store','icon','kdeconnect'):
-    if f'"bin/omapager-{helper}"' in service:errors.append('raw helper launch: '+helper)
-# Omapager Pro runs the sender's default action on a click by default, as
+    if f'"bin/hyprbell-{helper}"' in service:errors.append('raw helper launch: '+helper)
+# Hyprbell runs the sender's default action on a click by default, as
 # Omarchy's own notification service does; what must hold is that it stays a
 # setting, and that nothing but a click invokes it.
 # An editable Qt text input reads every clipboard change to update canPaste

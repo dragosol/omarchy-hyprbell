@@ -4,7 +4,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bin"))
-import omapager_edge as E  # noqa: E402
+import hyprbell_edge as E  # noqa: E402
 
 W = 3000          # a pad 0..3000 wide
 H = 2000

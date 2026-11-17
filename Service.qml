@@ -1,4 +1,4 @@
-// Omapager - notifications for Omarchy.
+// Hyprbell - notifications for Omarchy.
 //
 // This file IS the notification daemon: Quickshell's NotificationServer owns
 // org.freedesktop.Notifications, so omarchy.notifications must be listed in
@@ -32,16 +32,16 @@ Item {
   property var shell: null
 
   readonly property string home: Quickshell.env("HOME")
-  readonly property string storeBin: Qt.resolvedUrl("bin/omapager-run-store").toString().replace(/^file:\/\//, "")
-  readonly property string iconBin: Qt.resolvedUrl("bin/omapager-run-icon").toString().replace(/^file:\/\//, "")
-  readonly property string actionBin: Qt.resolvedUrl("bin/omapager-action").toString().replace(/^file:\/\//, "")
+  readonly property string storeBin: Qt.resolvedUrl("bin/hyprbell-run-store").toString().replace(/^file:\/\//, "")
+  readonly property string iconBin: Qt.resolvedUrl("bin/hyprbell-run-icon").toString().replace(/^file:\/\//, "")
+  readonly property string actionBin: Qt.resolvedUrl("bin/hyprbell-action").toString().replace(/^file:\/\//, "")
 
   // Missing website icons are fetched automatically unless the user opts out.
   property bool fetchIcons: true
   property bool requireSandbox: false
   property bool helperSettingsReady: false
   readonly property var helperEnvironment: ({
-    OMAPAGER_REQUIRE_SANDBOX: !helperSettingsReady || requireSandbox ? "1" : "0"
+    HYPRBELL_REQUIRE_SANDBOX: !helperSettingsReady || requireSandbox ? "1" : "0"
   })
   onRequireSandboxChanged: {
     sandboxStatus = ({ required: requireSandbox, sandboxOperational: false, mode: "pending" })
@@ -56,7 +56,7 @@ Item {
   property bool allowDefaultActionOnCardClick: true
   property int clipboardTimeout: 60
   property var sandboxStatus: ({ required: false, sandboxOperational: false, mode: "pending" })
-  readonly property string helperBin: Qt.resolvedUrl("bin/omapager-run-helper").toString().replace(/^file:\/\//, "")
+  readonly property string helperBin: Qt.resolvedUrl("bin/hyprbell-run-helper").toString().replace(/^file:\/\//, "")
   Process {
     id: sandboxProbe
     running: false
@@ -488,7 +488,568 @@ Item {
   function saveQuiet() {
     Store.write(storeProc, storeBin, "quiet-save",
                 { snoozes: snoozes, dnd: doNotDisturb, silencedSince: silencedSince,
-                  codesBypassQuiet: codesBypassQuiet })
+                  codesBypassQuiet: codesBypassQuiet, rules: rules })
+  }
+
+  // ------------------------------------------------------------- rules
+  //
+  // Standing decisions about a kind of notification, made from its own
+  // right-click menu (ContextMenu.qml) and kept with the rest of the quiet
+  // state. A rule is about a whole app ("app:<groupKey>") or about one kind
+  // of message from it ("kind:<groupKey>\u001f<summary>" - for a chat app the
+  // summary is the sender, for most others it is the event). A kind's rule
+  // speaks first, field by field, and anything it leaves unset falls through
+  // to its app's.
+  //
+  //   delivery     ""        as usual
+  //                "never"   dropped on arrival: not shown, not kept
+  //                "silent"  straight to the Notifications panel
+  //                "always"  through Do Not Disturb and snoozes
+  //   repeatLimit  N > 0     the same message (title and text) arriving more
+  //                          than N times in a few hours is cleared, copies
+  //                          already on screen with it
+  //   maxAge       seconds   cleared from the screen and the panel once older
+  //   noSticky     true      an urgent one times out like the rest
+  property var rules: ({})
+  property int rulesRevision: 0
+  readonly property var ruleDefaults: ({ delivery: "", repeatLimit: 0, maxAge: 0, noSticky: false })
+  // Blocked since the shell started, per rule: what a "Never" has spared you.
+  property var ruleHits: ({})
+
+  function kindText(row) {
+    // Never a kind for a verification code: its title can carry the code,
+    // and a rule key is written to disk in the clear.
+    if (!row || String(row.code || "") || String(row.codes || "")) return ""
+    return String(row.summary || "").replace(/\s+/g, " ").trim().slice(0, 120)
+  }
+  function appRuleKey(row) { return "app:" + String(row.groupKey || "") }
+  function kindRuleKey(row) {
+    var kind = kindText(row)
+    return kind ? "kind:" + String(row.groupKey || "") + "\u001f" + kind : ""
+  }
+  function ruleAt(key) { return key && rules[key] ? rules[key] : null }
+
+  function effectiveRule(row) {
+    var out = { delivery: "", repeatLimit: 0, maxAge: 0, noSticky: false, from: {} }
+    var layers = [appRuleKey(row), kindRuleKey(row)]
+    for (var i = 0; i < layers.length; i++) {
+      var rule = ruleAt(layers[i])
+      if (!rule) continue
+      for (var field in ruleDefaults) {
+        if (rule[field] === undefined || rule[field] === ruleDefaults[field]) continue
+        out[field] = rule[field]
+        out.from[field] = layers[i]
+      }
+    }
+    return out
+  }
+
+  function cleanRule(value) {
+    if (!value || typeof value !== "object") return null
+    var out = { label: String(value.label || "").slice(0, 200) }
+    out.delivery = ["never", "silent", "always"].indexOf(String(value.delivery)) >= 0 ? String(value.delivery) : ""
+    var limit = Math.round(Number(value.repeatLimit) || 0)
+    out.repeatLimit = limit > 0 ? Math.min(limit, 99) : 0
+    var age = Math.round(Number(value.maxAge) || 0)
+    out.maxAge = age > 0 ? Math.min(age, 90 * 86400) : 0
+    out.noSticky = value.noSticky === true
+    var empty = true
+    for (var field in ruleDefaults) if (out[field] !== ruleDefaults[field]) empty = false
+    return empty ? null : out
+  }
+
+  function loadRules(value) {
+    var next = {}
+    if (value && typeof value === "object")
+      for (var key in value) {
+        if (!/^(app|kind):/.test(key) || key.length > 400) continue
+        var rule = cleanRule(value[key])
+        if (rule) next[key] = rule
+      }
+    rules = next
+    rulesRevision += 1
+  }
+
+  // One field of one rule. Setting a field back to its default takes it out,
+  // and a rule with nothing left in it is no rule at all.
+  function setRule(key, label, field, value) {
+    if (!key || ruleDefaults[field] === undefined) return
+    var next = {}
+    for (var k in rules) next[k] = rules[k]
+    var rule = {}
+    var had = next[key] || {}
+    for (var f in had) rule[f] = had[f]
+    rule.label = String(label || had.label || key)
+    rule[field] = value
+    var clean = cleanRule(rule)
+    if (clean) next[key] = clean
+    else delete next[key]
+    rules = next
+    rulesRevision += 1
+    saveQuiet()
+    applyRuleNow(key, field)
+  }
+
+  function forgetRule(key) {
+    if (!rules[String(key)]) return
+    var next = {}
+    for (var k in rules) if (k !== String(key)) next[k] = rules[k]
+    rules = next
+    rulesRevision += 1
+    saveQuiet()
+    refreshMissed()
+  }
+
+  function forgetAllRules() {
+    rules = ({})
+    rulesRevision += 1
+    saveQuiet()
+    refreshMissed()
+  }
+
+  function ruleCovers(key, row) {
+    return key === appRuleKey(row) || (key !== "" && key === kindRuleKey(row))
+  }
+
+  // A decision is about what is already here as much as what comes next:
+  // "never" with the card still on screen would be a rule that did nothing
+  // you could see.
+  function applyRuleNow(key, field) {
+    var closing = [], why = ""
+    for (var i = 0; i < toasts.count; i++) {
+      var row = toasts.get(i)
+      if (leaving[row.key] || !ruleCovers(key, row)) continue
+      var rule = effectiveRule(row)
+      if (field === "delivery" && rule.delivery === "never") { closing.push(row.key); why = "blocked" }
+      else if (field === "delivery" && rule.delivery === "silent") { closing.push(row.key); why = "silent" }
+      else if (field === "maxAge" && rule.maxAge > 0 && Date.now() / 1000 - Number(row.ts || 0) > rule.maxAge) {
+        closing.push(row.key); why = "aged"
+      }
+    }
+    for (var c = 0; c < closing.length; c++) closeToast(closing[c], why)
+    if (field === "delivery" || field === "maxAge") {
+      var seen = []
+      for (var m = 0; m < missed.count; m++) {
+        var entry = missed.get(m)
+        if (entry.live || !ruleCovers(key, entry)) continue
+        var eff = effectiveRule(entry)
+        if (eff.delivery === "never"
+            || (eff.maxAge > 0 && Date.now() / 1000 - Number(entry.ts || 0) > eff.maxAge))
+          seen.push(entry.key)
+      }
+      if (seen.length) seeMissed(seen)
+      refreshMissed()
+    }
+  }
+
+  // Clearing by age is a standing rule, so it has to keep happening: the
+  // screen is checked on the clock, and the panel's reader applies the same
+  // rule as it reads (bin/hyprbell-store, `unseen`).
+  readonly property bool anyAgeRule: {
+    rulesRevision
+    for (var k in rules) if (rules[k].maxAge > 0) return true
+    return false
+  }
+  Timer {
+    interval: 30000
+    repeat: true
+    running: service.anyAgeRule && toasts.count > 0
+    onTriggered: {
+      var now = Date.now() / 1000, doomed = []
+      for (var i = 0; i < toasts.count; i++) {
+        var row = toasts.get(i)
+        if (service.leaving[row.key]) continue
+        var age = service.effectiveRule(row).maxAge
+        if (age > 0 && now - Number(row.ts || 0) > age) doomed.push(row.key)
+      }
+      for (var d = 0; d < doomed.length; d++) service.closeToast(doomed[d], "aged")
+    }
+  }
+
+  // How often the same message has come in, recently. In memory only: a nag
+  // that survives a restart has earned a fresh count.
+  property var repeatSeen: ({})
+  readonly property int repeatWindow: 6 * 3600
+  function repeatSignature(row) {
+    return String(row.groupKey || "") + "\u001f" + String(row.summary || "") + "\u001f" + String(row.bodyLine || "")
+  }
+  function countRepeat(row) {
+    var sig = repeatSignature(row), now = Date.now() / 1000
+    var next = {}, kept = 0
+    for (var k in repeatSeen) {
+      var e = repeatSeen[k]
+      if (now - e.last > repeatWindow) continue
+      next[k] = e
+      kept += 1
+    }
+    if (kept > 400) next = {}
+    var seen = next[sig] && now - next[sig].last <= repeatWindow ? next[sig].n : 0
+    next[sig] = { n: seen + 1, last: now }
+    repeatSeen = next
+    return seen + 1
+  }
+
+  function noteHit(rule, field) {
+    var key = rule.from[field]
+    if (!key) return
+    var next = {}
+    for (var k in ruleHits) next[k] = ruleHits[k]
+    next[key] = (next[key] || 0) + 1
+    ruleHits = next
+  }
+
+  function ruleWords(rule) {
+    var out = []
+    if (rule.delivery === "never") out.push("never shown")
+    else if (rule.delivery === "silent") out.push("silent")
+    else if (rule.delivery === "always") out.push("always shown")
+    if (rule.repeatLimit > 0) out.push("cleared after " + rule.repeatLimit + " repeats")
+    if (rule.maxAge > 0) out.push("cleared after " + ageWords(rule.maxAge))
+    if (rule.noSticky) out.push("never sticky")
+    var words = out.join(" · ")
+    return words.charAt(0).toUpperCase() + words.slice(1)
+  }
+  function ageWords(seconds) {
+    if (seconds % 604800 === 0) return seconds === 604800 ? "a week" : (seconds / 604800) + " weeks"
+    if (seconds % 86400 === 0) return seconds === 86400 ? "a day" : (seconds / 86400) + " days"
+    if (seconds % 3600 === 0) return seconds === 3600 ? "an hour" : (seconds / 3600) + " hours"
+    return Math.round(seconds / 60) + " minutes"
+  }
+
+  // For the bar panel's list, where a rule that hides everything it covers
+  // can still be found and undone.
+  function ruleList() {
+    rulesRevision
+    var out = []
+    for (var key in rules) {
+      var rule = rules[key]
+      out.push({ key: key, label: String(rule.label || key), words: ruleWords(rule),
+                 hits: ruleHits[key] || 0, kind: key.indexOf("kind:") === 0 })
+    }
+    out.sort(function(a, b) { return a.label.toLowerCase() < b.label.toLowerCase() ? -1 : 1 })
+    return out
+  }
+  readonly property int ruleCount: { rulesRevision; return Object.keys(rules).length }
+
+  // ------------------------------------------------------------- later
+  //
+  // "Notify me later": this notification, not its source. It leaves now and
+  // comes back as a fresh card at the time picked, from a file in the store
+  // (bin/hyprbell-store later-*), so a restart in between does not lose it.
+  // The copy is the store's sanitised one: a code is redacted, actions and
+  // reply handles do not survive, exactly as for history.
+  property var laterQueue: []          // [{ key, at }] - what is waiting, for the timer
+  readonly property var laterChoices: [
+    { short: "15m", seconds: 900 }, { short: "1h", seconds: 3600 },
+    { short: "3h", seconds: 10800 }, { short: "Tmrw", seconds: -1 }
+  ]
+  function laterSeconds(choice) {
+    var s = Number(choice)
+    if (s > 0) return s
+    var wake = new Date()
+    wake.setDate(wake.getDate() + 1)
+    wake.setHours(Math.max(0, Math.min(23, wakeHour)), 0, 0, 0)
+    return Math.max(600, Math.round((wake.getTime() - Date.now()) / 1000))
+  }
+
+  function notifyLater(row, seconds, fromPanel) {
+    if (!row || !row.key || !(seconds > 0)) return
+    var copy = Store.sanitiseForPersistence(row)
+    copy.key = nextKey()
+    Store.write(storeProc, storeBin, "later-put", copy, [String(Math.round(seconds))])
+    laterQueue = laterQueue.concat([{ key: copy.key, at: Date.now() / 1000 + seconds }])
+    var key = String(row.key)
+    if (rowIndexFor(key) >= 0) closeToast(key, "later")
+    else if (fromPanel) seeMissed([key])
+  }
+
+  Timer {
+    interval: 15000
+    repeat: true
+    triggeredOnStart: true
+    running: service.laterQueue.length > 0 && service.helperSettingsReady
+    onTriggered: {
+      var now = Date.now() / 1000
+      for (var i = 0; i < service.laterQueue.length; i++)
+        if (service.laterQueue[i].at <= now) { if (!laterDueProc.running) laterDueProc.running = true; return }
+    }
+  }
+
+  Process {
+    id: laterDueProc
+    environment: service.helperEnvironment
+    running: false
+    command: [service.storeBin, "later-due"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var due = Store.parseList(text)
+        var gone = {}
+        for (var i = 0; i < due.length; i++) {
+          gone[due[i].key] = true
+          service.remindNow(due[i])
+        }
+        service.laterQueue = service.laterQueue.filter(function(e) {
+          return !gone[e.key] && e.at > Date.now() / 1000 - 600
+        })
+      }
+    }
+  }
+
+  Process {
+    id: laterListProc
+    environment: service.helperEnvironment
+    running: false
+    command: [service.storeBin, "later-list"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var list = JSON.parse(String(text) || "[]")
+          var queue = []
+          if (Array.isArray(list))
+            for (var i = 0; i < list.length && i < 200; i++)
+              if (list[i] && list[i].key) queue.push({ key: String(list[i].key), at: Number(list[i].at) || 0 })
+          service.laterQueue = queue
+        } catch (e) {}
+      }
+    }
+  }
+
+  // Back on screen as a new arrival would be - unless you have since asked
+  // for quiet, in which case it waits in the panel like anything else held.
+  function remindNow(entry) {
+    var row = Store.restored(entry)
+    if (!row) return
+    row.key = nextKey()
+    row.restored = false
+    row.duration = durationFor(row.urgency, 0)
+    row.ts = Date.now() / 1000
+    var rule = effectiveRule(row)
+    if (rule.delivery === "never") return
+    if (rule.noSticky && row.duration === 0) row.duration = normalDuration
+    if (!reserveLive(row.key)) return
+    Store.write(storeProc, storeBin, "put", row)
+    var muted = rule.delivery === "always" ? ""
+              : doNotDisturb ? "silenced"
+              : (globalSnoozeUntil || snoozedUntil(row.groupKey)) ? "snoozed"
+              : rule.delivery === "silent" ? "silent" : ""
+    if (muted) {
+      Store.write(storeProc, storeBin, "close", null, [row.key, muted])
+      prefetchMissed()
+      releaseLive(row.key)
+      return
+    }
+    wantIcon(row)
+    showRow(row)
+  }
+
+  // ------------------------------------------------------------- context menu
+  //
+  // One menu at a time, for one notification, drawn by the ContextMenu on
+  // whichever output the card is on. The service owns what it says and what
+  // its rows do; the menu only draws and reports.
+  property string menuKey: ""
+  property var menuRow: null           // a plain copy: the card can go while the menu is up
+  property bool menuFromPanel: false
+  property string menuScreen: ""
+  property real menuX: 0
+  property real menuY: 0
+  property string menuScope: "app"     // app | kind
+  property int menuSerial: 0
+  readonly property bool menuOpen: menuKey !== ""
+
+  readonly property var menuFields: ["key", "groupKey", "source", "app", "summary", "body", "bodyLine",
+                                     "code", "codes", "urgency", "ts", "live", "rawBody", "appIcon",
+                                     "originalId", "senderPid", "expireTimeout", "duration"]
+  function openMenu(row, fromPanel, screenName, x, y) {
+    if (!row || !row.key) return
+    var copy = {}
+    for (var i = 0; i < menuFields.length; i++) copy[menuFields[i]] = row[menuFields[i]]
+    copy.live = fromPanel ? row.live === true : true
+    menuRow = copy
+    menuFromPanel = fromPanel === true
+    menuScreen = String(screenName || "")
+    menuX = x
+    menuY = y
+    // Open on the scope that already has a rule, so what you set last time
+    // is what you see.
+    var kindKey = kindRuleKey(copy)
+    menuScope = kindKey && rules[kindKey] ? "kind" : "app"
+    menuSerial += 1
+    menuKey = String(row.key)
+  }
+
+  function closeMenu() {
+    if (!menuKey) return
+    menuKey = ""
+    // Whatever the menu was holding still - the deck open, the panel in -
+    // is let go the way the pointer leaving it would have.
+    if (!pointerIn) collapseGrace.restart()
+    if (missedOpen && !missedPointerIn) missedAway.restart()
+    releaseHeld()
+  }
+
+  readonly property string menuRuleKey: {
+    if (!menuRow) return ""
+    return menuScope === "kind" && kindRuleKey(menuRow) ? kindRuleKey(menuRow) : appRuleKey(menuRow)
+  }
+  readonly property string menuSourceLabel: menuRow ? String(menuRow.source || menuRow.app || "this app") : ""
+  function menuRuleLabel() {
+    if (!menuRow) return ""
+    return menuRuleKey.indexOf("kind:") === 0 ? menuSourceLabel + " · " + kindText(menuRow) : menuSourceLabel
+  }
+
+  function menuGroupSize() {
+    if (!menuRow) return 1
+    return menuFromPanel ? missedGroupSize(menuRow.key, missedCount)
+                         : groupSizeOf(menuRow.key, layoutRevision)
+  }
+
+  // What the menu says, row by row. Rebuilt whenever anything it shows can
+  // change; cheap, because it is a dozen plain objects.
+  readonly property var menuRows: {
+    rulesRevision; snoozeRevision; doNotDisturb; menuSerial; menuScope
+    if (!menuRow) return []
+    var row = menuRow, out = []
+    var src = menuSourceLabel
+    var own = rules[menuRuleKey] || ruleDefaults
+    var eff = effectiveRule(row)
+    var kindScope = menuRuleKey.indexOf("kind:") === 0
+    var parent = kindScope ? (rules[appRuleKey(row)] || ruleDefaults) : ruleDefaults
+    function chip(value, label, field) {
+      var on = own[field] === value
+      return { value: String(value), label: label, on: on,
+               inherited: !on && kindScope && parent[field] === value }
+    }
+    var scopeWord = kindScope ? "“" + kindText(row) + "” from " + src : "everything from " + src
+
+    out.push({ type: "header", label: src, hint: row.ts ? Qt.formatDateTime(new Date(Number(row.ts) * 1000), "HH:mm") : "" })
+    out.push({ type: "sep" })
+
+    var later = []
+    for (var l = 0; l < laterChoices.length; l++)
+      later.push({ value: String(laterChoices[l].seconds), label: laterChoices[l].short, on: false })
+    out.push({ type: "chips", id: "later", glyph: "\u{f0954}", label: "Notify later", chips: later,
+               desc: "Put this one away and bring it back then. It survives a restart." })
+
+    var snooze = []
+    for (var s = 0; s < snoozeOptions.length; s++)
+      snooze.push({ value: String(snoozeOptions[s].seconds),
+                    label: snoozeOptions[s].short === "Tomorrow" ? "Tmrw" : snoozeOptions[s].short, on: false })
+    var asleep = snoozedUntil(row.groupKey) > 0
+    out.push({ type: "chips", id: "snooze", glyph: "\u{f04b2}", label: asleep ? "Snoozed" : "Snooze app", chips: snooze,
+               desc: asleep ? src + " is snoozed until " + Qt.formatDateTime(new Date(snoozedUntil(row.groupKey) * 1000), "HH:mm")
+                              + ". Pick again to change when it wakes."
+                            : "Hold everything from " + src + " back for a while. It waits in the panel." })
+
+    out.push({ type: "action", id: "copy", glyph: "\u{f018f}", label: String(row.code || "") ? "Copy code" : "Copy text",
+               desc: String(row.code || row.codes || "") ? "Codes are copied as sensitive and cleared from the clipboard."
+                                                         : "The title and message, as plain text." })
+    var size = menuGroupSize()
+    if (size > 1)
+      out.push({ type: "action", id: "clearStack", glyph: "\u{f0a7a}", label: "Clear stack", hint: size + " from " + src,
+                 desc: "Clear every " + src + " notification in this stack." })
+
+    out.push({ type: "sep" })
+    var scopes = [{ value: "app", label: src, on: !kindScope }]
+    if (kindRuleKey(row)) scopes.push({ value: "kind", label: "“" + kindText(row) + "”", on: kindScope })
+    out.push({ type: "scope", id: "scope", label: "Rules for", chips: scopes,
+               desc: scopes.length > 1 ? "Rules for all of " + src + ", or only for ones titled “" + kindText(row) + "”. The narrower one wins."
+                                       : "Rules for every notification from " + src + "." })
+
+    out.push({ type: "chips", id: "delivery", glyph: "\u{f009a}", label: "Deliver",
+               chips: [chip("never", "Never", "delivery"), chip("silent", "Silent", "delivery"), chip("always", "Always", "delivery")],
+               descs: { never: "Never bother me with " + scopeWord + ": not on screen, not in the panel.",
+                        silent: "Silent: " + scopeWord + " goes straight to the Notifications panel, never on screen.",
+                        always: "Always show " + scopeWord + ", even through Do Not Disturb and snoozes." },
+               desc: "How " + scopeWord + " reaches you. Pick the lit one again to go back to normal." })
+    out.push({ type: "chips", id: "repeatLimit", glyph: "\u{f0456}", label: "Auto-clear after",
+               chips: [chip(2, "2×", "repeatLimit"), chip(3, "3×", "repeatLimit"), chip(5, "5×", "repeatLimit")],
+               desc: "When the same message keeps coming back, clear it - and its copies - once it has tried this many times." })
+    out.push({ type: "chips", id: "maxAge", glyph: "\u{f00f6}", label: "Clear older than",
+               chips: [chip(3600, "1h", "maxAge"), chip(86400, "1d", "maxAge"), chip(604800, "1w", "maxAge")],
+               desc: "Clear " + scopeWord + " from the screen and the panel once it is older than this." })
+    out.push({ type: "toggle", id: "noSticky", glyph: "\u{f0403}", label: "Never keep sticky",
+               on: own.noSticky === true, inherited: own.noSticky !== true && kindScope && parent.noSticky === true,
+               desc: "Urgent ones time out like the rest instead of waiting until you dismiss them." })
+    if (rules[menuRuleKey])
+      out.push({ type: "action", id: "forget", glyph: "\u{f0450}", label: "Reset these rules",
+                 desc: "Forget every rule set for " + scopeWord + "." })
+
+    out.push({ type: "sep" })
+    out.push({ type: "toggle", id: "dnd", glyph: "\u{f009b}", label: "Do Not Disturb", on: doNotDisturb,
+               desc: "Hold everything back until you turn it off. Verification codes " + (codesBypassQuiet ? "still come through." : "wait too.") })
+    out.push({ type: "action", id: "clearAll", glyph: "\u{f0a79}", label: menuFromPanel ? "Clear the panel" : "Clear everything", danger: true,
+               desc: menuFromPanel ? "Clear everything in the Notifications panel." : "Clear every notification on screen." })
+
+    // Resting, the footer says what is in force for this notification.
+    var words = []
+    var effWords = ruleWords(eff)
+    if (effWords) words.push(effWords + ".")
+    var hits = (ruleHits[appRuleKey(row)] || 0) + (kindRuleKey(row) ? (ruleHits[kindRuleKey(row)] || 0) : 0)
+    if (hits) words.push(hits === 1 ? "1 cleared for you so far." : hits + " cleared for you so far.")
+    out.push({ type: "footer", text: words.length ? words.join(" ")
+                                                  : "No rules for " + src + " yet. Point at anything here to see what it does." })
+    return out
+  }
+
+  function menuDo(id, value) {
+    var row = menuRow
+    if (!row) return
+    var key = String(row.key), live = rowIndexFor(key) >= 0
+    var keepOpen = false
+    switch (id) {
+    case "later":
+      notifyLater(row, laterSeconds(value), menuFromPanel)
+      break
+    case "snooze":
+      snoozeSource(String(row.groupKey || ""), menuSourceLabel, Number(value), true)
+      break
+    case "copy":
+      var secret = String(row.code || "")
+      if (secret) copyText(secret, true)
+      else copyText([String(row.summary || ""), String(row.bodyLine || "")]
+                      .filter(function(t) { return t !== "" }).join("\n"), false)
+      break
+    case "clearStack":
+      if (menuFromPanel) throwMissedGroup(key)
+      else if (live) throwGroup(key)
+      break
+    case "clearAll":
+      if (menuFromPanel) clearMissed()
+      else clearAll("dismissed")
+      break
+    case "dnd":
+      setDoNotDisturb(!doNotDisturb)
+      keepOpen = true
+      break
+    case "scope":
+      menuScope = value === "kind" ? "kind" : "app"
+      keepOpen = true
+      break
+    case "delivery":
+      var current = (rules[menuRuleKey] || ruleDefaults).delivery
+      setRule(menuRuleKey, menuRuleLabel(), "delivery", current === value ? "" : String(value))
+      // Never and Silent take this card away; there is nothing left to set.
+      keepOpen = value === "always" || current === value
+      break
+    case "repeatLimit":
+    case "maxAge":
+      var was = (rules[menuRuleKey] || ruleDefaults)[id]
+      setRule(menuRuleKey, menuRuleLabel(), id, was === Number(value) ? 0 : Number(value))
+      keepOpen = true
+      break
+    case "noSticky":
+      setRule(menuRuleKey, menuRuleLabel(), "noSticky", !((rules[menuRuleKey] || ruleDefaults).noSticky === true))
+      keepOpen = true
+      break
+    case "forget":
+      forgetRule(menuRuleKey)
+      keepOpen = true
+      break
+    }
+    if (!keepOpen) closeMenu()
   }
 
   // A small session-only reading stack for notifications that were not quietened.
@@ -934,6 +1495,8 @@ Item {
     id: collapseGrace
     interval: 120
     onTriggered: {
+      // The pointer left for the menu it opened, not for somewhere else.
+      if (service.menuOpen) return
       service.commit(function() { service.expanded = false; service.openDeck = "" })
       // Back to the top: the newest notification is the one a shut deck
       // shows, so a deck left scrolled would reopen somewhere in the middle.
@@ -955,7 +1518,7 @@ Item {
   // there is just a lost notification.
   // ...and while an answer is being typed. A card arriving above the one you
   // are replying to moves the field out from under the cursor mid-sentence.
-  function holding() { return (pointerIn && expanded) || replyingKey !== "" }
+  function holding() { return (pointerIn && expanded) || replyingKey !== "" || menuKey !== "" }
 
   function releaseHeld() {
     if (!held.length) return
@@ -1238,14 +1801,14 @@ Item {
   // past the middle, or with a flick, and it stays.
   //
   // Only the device knows where on the pad fingers started, so a small
-  // helper reads it (bin/omapager-edge, sandboxed to that one device node)
+  // helper reads it (bin/hyprbell-edge, sandboxed to that one device node)
   // and streams begin / move / end. Reading the touchpad needs a one-time
   // udev rule the user adds by hand (README, install step 3) - never a script
   // from this directory, which the user can write to and so must not run as
   // root. Without it this is simply off.
   property bool edgeSwipe: true
   property string edgeStatus: "off"     // off | starting | ready | no-access | no-touchpad | unavailable
-  readonly property string edgeBin: Qt.resolvedUrl("bin/omapager-run-edge").toString().replace(/^file:\/\//, "")
+  readonly property string edgeBin: Qt.resolvedUrl("bin/hyprbell-run-edge").toString().replace(/^file:\/\//, "")
   // How much of the pad's width pulls the panel fully in. A quarter of a
   // wide laptop pad is about a finger's comfortable sweep.
   readonly property real edgeFull: 0.22
@@ -1348,6 +1911,12 @@ Item {
     var row = Store.normalise(source)
     row.duration = 0                 // nothing in here times out
     row.live = live
+    // normalise() drops stored_image - a path from a row is never trusted -
+    // so a live card joining the panel arrived as a letter tile, its icon
+    // already resolved and showing on the deck beside it. Only the service's
+    // own cache, which holds what the icon helper produced, puts it back.
+    var iconKey = String(row.groupKey || row.source || row.app || "")
+    if (iconKey && iconCache[iconKey]) row.stored_image = iconCache[iconKey]
     return row
   }
 
@@ -1675,7 +2244,7 @@ Item {
     id: missedAway
     interval: service.missedPointerIn ? 0 : (service.missedWasEntered ? 1500 : 9000)
     running: false
-    onTriggered: if (!service.missedPointerIn && !service.missedFollowing) service.closeMissed()
+    onTriggered: if (!service.missedPointerIn && !service.missedFollowing && !service.menuOpen) service.closeMissed()
   }
   property bool missedWasEntered: false
   onMissedPointerInChanged: {
@@ -2072,7 +2641,7 @@ Item {
   Process {
     id: blurRule
     command: ["hyprctl", "eval",
-      'hl.layer_rule({ name = "omapager-blur", match = { namespace = "^omapager$" }, blur = true, ignore_alpha = 0.1 })']
+      'hl.layer_rule({ name = "hyprbell-blur", match = { namespace = "^hyprbell$" }, blur = true, ignore_alpha = 0.1 })']
   }
   Component.onCompleted: {
     naturalProbe.running = true; borderProbe.running = true
@@ -2359,6 +2928,23 @@ Item {
 
     var row = Store.snapshot(notification, key, NotificationUrgency)
     row.duration = durationFor(notification.urgency, row.expireTimeout)
+    var update = rowIndexFor(key) >= 0
+    var rule = effectiveRule(row)
+
+    // "Never": not shown, not kept, not counted as missed. A card already on
+    // screen that the sender updates goes too - the rule is about it now.
+    if (rule.delivery === "never") {
+      noteHit(rule, "delivery")
+      if (update) {
+        if (refs[key] !== notification) { try { notification.tracked = false } catch (e) {} }
+        closeToast(key, "blocked")
+      } else {
+        notification.tracked = false
+        releaseLive(key)
+      }
+      return
+    }
+    if (rule.noSticky && row.duration === 0) row.duration = normalDuration
     rememberRecent(row)
 
     var previous = refs[key]
@@ -2377,8 +2963,24 @@ Item {
     // A sharing offer never changes delivery; only an explicit snooze does.
     var muted = doNotDisturb ? "silenced"
               : (globalSnoozeUntil || snoozedUntil(row.groupKey)) ? "snoozed" : ""
+    // "Always" goes through any quiet; "Silent" is a quiet of its own, and
+    // the one you asked for by name, so it holds back urgent ones too.
+    if (rule.delivery === "always") muted = ""
+    else if (!muted && rule.delivery === "silent") muted = "silent"
     if (muted && codesBypassQuiet && String(row.code || "")) muted = ""
-    if (muted && notification.urgency !== NotificationUrgency.Critical) {
+
+    // The same message, again and again: past the limit it is cleared, and
+    // so are the copies of it still on screen.
+    if (!update && countRepeat(row) > rule.repeatLimit && rule.repeatLimit > 0) {
+      noteHit(rule, "repeatLimit")
+      var sig = repeatSignature(row), copies = []
+      for (var r = 0; r < toasts.count; r++)
+        if (repeatSignature(toasts.get(r)) === sig) copies.push(toasts.get(r).key)
+      for (var c = 0; c < copies.length; c++) closeToast(copies[c], "repeat")
+      muted = "repeat"
+    }
+
+    if (muted && (muted === "silent" || muted === "repeat" || notification.urgency !== NotificationUrgency.Critical)) {
       Store.write(storeProc, storeBin, "put", row)
       Store.write(storeProc, storeBin, "close", null, [key, muted])
       prefetchMissed()
@@ -2903,7 +3505,7 @@ Item {
     if (win) focusWindow(win)
     // Not `indexOf(".") > 0`. A source is lifted out of text the sender
     // wrote, and "https://" + it is a URL going wherever it says - so it
-    // has to be a hostname by the same test omapager-icon uses before it
+    // has to be a hostname by the same test hyprbell-icon uses before it
     // will fetch anything, not merely a string with a dot in it.
     else if (Markup.hostname(row.source))
       Security.openExternalUrl("https://" + Markup.hostname(row.source) + "/")
@@ -2916,7 +3518,7 @@ Item {
   // keeps an object per phone notification on its own bus carrying a replyId
   // and a sendReply method - the part the freedesktop spec has no room for -
   // and the helper matches our row to it by app name and text.
-  readonly property string kdeBin: Qt.resolvedUrl("bin/omapager-run-kdeconnect")
+  readonly property string kdeBin: Qt.resolvedUrl("bin/hyprbell-run-kdeconnect")
                                      .toString().replace(/^file:\/\//, "")
   property string replyingKey: ""        // the card with its reply box open
 
@@ -3227,6 +3829,7 @@ Item {
             // default, not a standing instruction to put it back.
             if (read.codesBypassQuiet !== undefined)
               service.codesBypassQuiet = read.codesBypassQuiet === true
+            service.loadRules(read.rules)
           }
         } catch (e) {}
         service.snoozeRevision += 1
@@ -3252,6 +3855,7 @@ Item {
     service.refreshMissed()
     restoreProc.running = true
     quietRestoreProc.running = true
+    laterListProc.running = true
     tidyProc.running = true
     Store._pump(storeProc)
     pumpIcons()
@@ -3273,7 +3877,7 @@ Item {
   }
 
   IpcHandler {
-    target: "omapager"
+    target: "hyprbell"
     function count(): string { return String(toasts.count) }
     // What the daemon thinks is true, for a script to check against what it
     // can see. Everything here answers a question that has actually been
@@ -3415,6 +4019,25 @@ Item {
     }
 
     function snoozes(): string { return JSON.stringify(service.liveSnoozes()) }
+    // The right-click menu's standing rules.
+    function rules(): string { return JSON.stringify(service.ruleList()) }
+    function forgetRule(key: string): string { service.forgetRule(key); return "ok" }
+    function forgetRules(): string { service.forgetAllRules(); return "ok" }
+    // Open the newest card's right-click menu, as a right-click on it would.
+    function menu(): string {
+      if (toasts.count === 0) return "nothing on screen"
+      var row = toasts.get(0)
+      service.openMenu(row, false, service.targetDisplayName, service.notificationWidth * 0.6,
+                       service.barClearance + Style.space(30))
+      return JSON.stringify(service.menuRows.map(function(r) { return r.type + ":" + (r.id || r.label || "") }))
+    }
+    function menuPick(id: string, value: string): string {
+      if (!service.menuOpen) return "no menu"
+      service.menuDo(id, value)
+      return "ok"
+    }
+    function closeMenu(): string { service.closeMenu(); return "ok" }
+    function later(): string { return JSON.stringify(service.laterQueue) }
 
     // Whether a verification code gets through the quiet. The panel's key
     // button, from a script.
@@ -3495,7 +4118,7 @@ Item {
   // quietly dead: the keys still fire, the shell answers "target not found",
   // and nothing tells you why.
   //
-  // So omapager answers to it as well. The names and return values are the
+  // So hyprbell answers to it as well. The names and return values are the
   // built-in service's, not ours, because the callers are Omarchy's.
   IpcHandler {
     target: "notifications"
@@ -3628,7 +4251,7 @@ Item {
       color: "transparent"
 
       // The name the Hyprland layer_rule matches on for blur.
-      WlrLayershell.namespace: "omapager"
+      WlrLayershell.namespace: "hyprbell"
       WlrLayershell.layer: WlrLayer.Overlay
       // Exclusive while a reply is being typed, and nothing at all otherwise.
       // OnDemand only hands the keyboard over when the surface is clicked,
@@ -3901,6 +4524,7 @@ Item {
             place: service.placements[model.key]
                    || ({ y: 0, scale: 1, opacity: 0, z: 1, front: false, hidden: true })
             hovered: service.hoverKey === model.key
+                     || (service.menuKey === model.key && !service.menuFromPanel)
             actions: service.actionsOf(model.key, service.refsRevision)
             fontScale: service.fontScale
             windowBorderWidth: service.windowBorderWidth
@@ -3930,7 +4554,11 @@ Item {
             sole: toasts.count === 1
             // Nothing counts down while the deck is open, mid-throw, or with
             // an answer half typed into it.
-            paused: service.expanded || service.replyingKey !== "" || service.missedVisible
+            paused: service.expanded || service.replyingKey !== "" || service.missedVisible || service.menuOpen
+            menuShown: service.menuKey === model.key && !service.menuFromPanel
+            onMenuRequested: function(px, py) {
+              service.openMenu(toast.row, false, String(surface.modelData.name), px, py)
+            }
 
             // The target height, not the drawn one: a step function of the
             // card's state, so the layout moves on events rather than frames.
@@ -4264,6 +4892,7 @@ Item {
                     onTargetHeightChanged: service.noteMissedHeight(missedSlot.key, targetHeight)
                     Component.onCompleted: service.noteMissedHeight(missedSlot.key, targetHeight)
                     hovered: service.missedHoverKey === missedSlot.key
+                             || (service.menuKey === missedSlot.key && service.menuFromPanel)
                     hoverX: service.missedHoverX - missedSlot.x
                     hoverY: service.missedHoverY - missedSlot.y
                     fontScale: service.fontScale
@@ -4288,6 +4917,10 @@ Item {
                     onSilenceRequested: service.doNotDisturb = true
                     onDismissGroupRequested: service.throwMissedGroup(missedSlot.key)
                     onDismissAllRequested: service.clearMissed()
+                    menuShown: service.menuKey === missedSlot.key && service.menuFromPanel
+                    onMenuRequested: function(px, py) {
+                      service.openMenu(missedSlot.model, true, String(surface.modelData.name), px, py)
+                    }
                   }
                 }
               }
@@ -4451,6 +5084,23 @@ Item {
         onPositionChanged: function(mouse) {
           if (mouse.y >= service.barClearance) service.revealFromPeek()
         }
+      }
+
+      // A notification's right-click menu: its own popup, so it can be as
+      // tall as it needs and reach past this narrow surface's edge.
+      ContextMenu {
+        host: surface
+        daemon: service
+        want: service.menuOpen && service.menuScreen === String(surface.modelData.name)
+              && surface.showingNotifications
+        serial: service.menuSerial
+        atX: service.menuX
+        atY: service.menuY
+        rows: service.menuRows
+        windowBorderWidth: service.windowBorderWidth
+        fontScale: service.fontScale
+        onChosen: function(id, value) { service.menuDo(id, value) }
+        onDismissed: service.closeMenu()
       }
     }
   }

@@ -49,7 +49,7 @@ def main():
         os.execv(command[0], command)
     except (OSError, ValueError):
         # Do not log sender-supplied paths or other notification contents.
-        print("omapager: notification action refused or unavailable", file=sys.stderr)
+        print("hyprbell: notification action refused or unavailable", file=sys.stderr)
         return 1
 
 
