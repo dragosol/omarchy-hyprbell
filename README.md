@@ -136,7 +136,8 @@ by expanding Recent in the bar panel. The list clears when the shell restarts.
 newest first, including messages held while snoozed or silenced. Unlike Recent,
 this list survives shell restarts and refreshes each time the panel opens.
 Click a card to expand its message, then scroll to read the rest. `historyHours`
-controls retention; `0` disables disk history. Detected verification codes stay
+controls retention; `0` disables disk history - and then a "Notify later" is held
+in memory until it is due, so it does not survive a shell restart. Detected verification codes stay
 redacted.
 
 **Source icons.** Use local icons or fetch missing website icons automatically.
@@ -507,6 +508,14 @@ Disk history defaults to 24 hours and 100 entries. Hyprbell redacts detected
 verification-code notifications before saving them, but detection cannot identify
 every secret. Copied codes clear after the configured timeout only if the
 clipboard still contains the same code.
+
+Two things from the right-click menu are kept as well. A rule is saved in
+`quiet.json` beside the snoozes; a rule for one title keeps that title (often a
+sender's name), and it stays until you forget the rule in the bar panel. A
+notification is never offered a per-title rule if it carries a verification
+code. "Notify later" keeps the same redacted copy history would, under
+`later/`, and deletes it when it is shown - or holds it in memory only, when
+`historyHours` is `0`.
 
 State lives in `~/.local/state/omarchy/hyprbell/`. See [settings](#settings) for
 retention and clipboard options, and [SECURITY.md](SECURITY.md) to report a

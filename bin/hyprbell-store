@@ -340,6 +340,10 @@ def cmd_later_put(seconds):
     seconds = float(seconds)
     if not (0 < seconds <= 30 * 86400):
         return 2
+    # With disk history off the service keeps these in memory; refuse here
+    # too, so no caller can put message text on disk against that setting.
+    if not retention():
+        return 3
     entry = sanitise(input_json(sys.stdin))
     key = safe(entry.get("key"))
     write_json(os.path.join(LATER, key + ".json"), {"at": time.time() + seconds, "entry": entry})

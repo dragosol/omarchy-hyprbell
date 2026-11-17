@@ -77,7 +77,11 @@ Item {
     interval: 1
     onTriggered: sandboxProbe.running = true
   }
+  // 0 means nothing about a notification is kept on disk once it closes -
+  // which "Notify later" has to honour too (see notifyLater).
+  property int historyHours: 24
   function setHistoryHours(hours) {
+    historyHours = Number(hours)
     Store.write(storeProc, storeBin, "policy", {historyHours: hours})
   }
 
@@ -756,8 +760,15 @@ Item {
     if (!row || !row.key || !(seconds > 0)) return
     var copy = Store.sanitiseForPersistence(row)
     copy.key = nextKey()
-    Store.write(storeProc, storeBin, "later-put", copy, [String(Math.round(seconds))])
-    laterQueue = laterQueue.concat([{ key: copy.key, at: Date.now() / 1000 + seconds }])
+    var at = Date.now() / 1000 + seconds
+    if (historyHours === 0) {
+      // Disk history is off, so the copy is held here instead: it survives
+      // until it is due, not a restart. Nothing of it is written anywhere.
+      laterQueue = laterQueue.concat([{ key: copy.key, at: at, row: copy }])
+    } else {
+      Store.write(storeProc, storeBin, "later-put", copy, [String(Math.round(seconds))])
+      laterQueue = laterQueue.concat([{ key: copy.key, at: at }])
+    }
     var key = String(row.key)
     if (rowIndexFor(key) >= 0) closeToast(key, "later")
     else if (fromPanel) seeMissed([key])
@@ -769,9 +780,15 @@ Item {
     triggeredOnStart: true
     running: service.laterQueue.length > 0 && service.helperSettingsReady
     onTriggered: {
-      var now = Date.now() / 1000
-      for (var i = 0; i < service.laterQueue.length; i++)
-        if (service.laterQueue[i].at <= now) { if (!laterDueProc.running) laterDueProc.running = true; return }
+      var now = Date.now() / 1000, onDisk = false, kept = []
+      for (var i = 0; i < service.laterQueue.length; i++) {
+        var e = service.laterQueue[i]
+        if (e.row && e.at <= now) { service.remindNow(e.row); continue }
+        if (!e.row && e.at <= now) onDisk = true
+        kept.push(e)
+      }
+      if (kept.length !== service.laterQueue.length) service.laterQueue = kept
+      if (onDisk && !laterDueProc.running) laterDueProc.running = true
     }
   }
 
@@ -790,7 +807,7 @@ Item {
           service.remindNow(due[i])
         }
         service.laterQueue = service.laterQueue.filter(function(e) {
-          return !gone[e.key] && e.at > Date.now() / 1000 - 600
+          return !gone[e.key] && (e.row || e.at > Date.now() / 1000 - 600)
         })
       }
     }
@@ -806,7 +823,8 @@ Item {
       onStreamFinished: {
         try {
           var list = JSON.parse(String(text) || "[]")
-          var queue = []
+          // Held-in-memory ones (history off) are not in the store's list.
+          var queue = service.laterQueue.filter(function(e) { return !!e.row })
           if (Array.isArray(list))
             for (var i = 0; i < list.length && i < 200; i++)
               if (list[i] && list[i].key) queue.push({ key: String(list[i].key), at: Number(list[i].at) || 0 })
@@ -4037,7 +4055,9 @@ Item {
       return "ok"
     }
     function closeMenu(): string { service.closeMenu(); return "ok" }
-    function later(): string { return JSON.stringify(service.laterQueue) }
+    function later(): string {
+      return JSON.stringify(service.laterQueue.map(function(e) { return { key: e.key, at: e.at, memory: !!e.row } }))
+    }
 
     // Whether a verification code gets through the quiet. The panel's key
     // button, from a script.
