@@ -1,0 +1,36 @@
+# Advisories in packages that semgrep pins exactly (semgrep 1.185.0 requires
+# mcp==1.29.0 and opentelemetry-api~=1.37.0), so the lock cannot move past
+# them yet. These are development-only scanner dependencies, never loaded by
+# the plugin. CI only runs `semgrep scan --metrics=off`, which starts no MCP
+# server or client and parses no incoming trace headers. Each ignore expires
+# so the next look is forced; drop them once semgrep relaxes its pins.
+
+[[IgnoredVulns]]
+id = "GHSA-5h93-6whr-6q8j"
+ignoreUntil = 2027-02-17
+reason = "mcp HTTP client transport redirects; semgrep's MCP client is never used here"
+
+[[IgnoredVulns]]
+id = "GHSA-84m7-p3x7-pcfv"
+ignoreUntil = 2027-02-17
+reason = "mcp StreamableHTTP server sessions; semgrep's MCP server is never started here"
+
+[[IgnoredVulns]]
+id = "GHSA-rwrf-2pqf-9j8j"
+ignoreUntil = 2027-02-17
+reason = "mcp client $ref fetching during tool-result validation; no MCP client runs here"
+
+[[IgnoredVulns]]
+id = "GHSA-w4fh-qvv9-3v23"
+ignoreUntil = 2027-02-17
+reason = "mcp server bearer-token audience check; semgrep's MCP server is never started here"
+
+[[IgnoredVulns]]
+id = "GHSA-mf5v-w3w3-f6cg"
+ignoreUntil = 2027-02-17
+reason = "opentelemetry-api traceparent parsing of incoming headers; semgrep runs with --metrics=off and receives none"
+
+[[IgnoredVulns]]
+id = "GHSA-xcq7-p3pf-p88h"
+ignoreUntil = 2027-02-17
+reason = "opentelemetry-api tracestate parsing of incoming headers; semgrep runs with --metrics=off and receives none"
