@@ -874,6 +874,11 @@ Item {
   property real menuX: 0
   property real menuY: 0
   property string menuScope: "app"     // app | kind
+  // The panel's heading has a menu of its own, about the panel and the quiet
+  // state as a whole rather than about one source. It takes a key no card can
+  // have, so no card lights up for it.
+  readonly property string panelMenuKey: "\u001fpanel"
+  readonly property bool menuForPanel: menuKey === panelMenuKey
   property int menuSerial: 0
   readonly property bool menuOpen: menuKey !== ""
 
@@ -896,6 +901,16 @@ Item {
     menuScope = kindKey && rules[kindKey] ? "kind" : "app"
     menuSerial += 1
     menuKey = String(row.key)
+  }
+
+  function openPanelMenu(screenName, x, y) {
+    menuRow = null
+    menuFromPanel = true
+    menuScreen = String(screenName || "")
+    menuX = x
+    menuY = y
+    menuSerial += 1
+    menuKey = panelMenuKey
   }
 
   function closeMenu() {
@@ -927,7 +942,8 @@ Item {
   // What the menu says, row by row. Rebuilt whenever anything it shows can
   // change; cheap, because it is a dozen plain objects.
   readonly property var menuRows: {
-    rulesRevision; snoozeRevision; doNotDisturb; menuSerial; menuScope
+    rulesRevision; snoozeRevision; doNotDisturb; menuSerial; menuScope; codesBypassQuiet; missedCount
+    if (menuForPanel) return panelMenuRows()
     if (!menuRow) return []
     var row = menuRow, out = []
     var src = menuSourceLabel
@@ -1012,7 +1028,79 @@ Item {
     return out
   }
 
+  // The heading's menu: the quiet state, and the panel as a whole.
+  function panelMenuRows() {
+    var out = [], clock = function(t) { return Qt.formatDateTime(new Date(t * 1000), "HH:mm") }
+    out.push({ type: "header", label: "Notifications",
+               hint: missedCount > 0 ? missedCount + " in the panel" : "" })
+    out.push({ type: "sep" })
+
+    out.push({ type: "toggle", id: "dnd", glyph: "\u{f009b}", label: "Do Not Disturb", on: doNotDisturb,
+               desc: "Hold everything back until you turn it off. Verification codes " + (codesBypassQuiet ? "still come through." : "wait too.") })
+    var snooze = []
+    for (var s = 0; s < snoozeOptions.length; s++)
+      snooze.push({ value: String(snoozeOptions[s].seconds),
+                    label: snoozeOptions[s].short === "Tomorrow" ? "Tmrw" : snoozeOptions[s].short, on: false })
+    out.push({ type: "chips", id: "snoozeAll", glyph: "\u{f04b2}", label: globalSnoozeUntil ? "Snoozed" : "Snooze all",
+               chips: snooze,
+               desc: globalSnoozeUntil ? "Everything is snoozed until " + clock(globalSnoozeUntil) + ". Pick again to change when it wakes."
+                                       : "Hold everything back for a while. It waits in the panel." })
+    if (globalSnoozeUntil || snoozeCount > 0)
+      out.push({ type: "action", id: "wakeAll", glyph: "\u{f04b3}", label: "Wake everything",
+                 hint: globalSnoozeUntil ? "until " + clock(globalSnoozeUntil)
+                                         : snoozeCount === 1 ? "1 app" : snoozeCount + " apps",
+                 desc: "End every snooze now" + (snoozeCount > 0 ? ", " + liveSnoozes().map(function(e) { return e.label }).join(", ") + " included." : ".") })
+    out.push({ type: "toggle", id: "codes", glyph: "\u{f0306}", label: "Codes break through", on: codesBypassQuiet,
+               desc: "Verification codes still show while you have Do Not Disturb on or are snoozing." })
+
+    if (ruleCount > 0 || missedCount > 0) out.push({ type: "sep" })
+    if (ruleCount > 0)
+      out.push({ type: "action", id: "forgetRules", glyph: "\u{f0450}", label: "Forget all rules",
+                 hint: ruleCount === 1 ? "1 rule" : ruleCount + " rules", danger: true,
+                 desc: "Forget every rule set from a notification's menu. Apps go back to normal." })
+    if (missedCount > 0)
+      out.push({ type: "action", id: "clearAll", glyph: "\u{f0a79}", label: "Clear the panel", danger: true,
+                 desc: "Clear everything in the Notifications panel." })
+
+    var words = []
+    if (doNotDisturb) words.push("Do Not Disturb is on.")
+    else if (globalSnoozeUntil) words.push("Snoozed until " + clock(globalSnoozeUntil) + ".")
+    if (snoozeCount > 0) words.push((snoozeCount === 1 ? "1 app" : snoozeCount + " apps") + " snoozed.")
+    if (ruleCount > 0) words.push((ruleCount === 1 ? "1 rule" : ruleCount + " rules") + " in force.")
+    out.push({ type: "footer", text: words.length ? words.join(" ")
+                                                  : "Nothing held back. Point at anything here to see what it does." })
+    return out
+  }
+
+  function panelMenuDo(id, value) {
+    var keepOpen = false
+    switch (id) {
+    case "dnd":
+      setDoNotDisturb(!doNotDisturb)
+      keepOpen = true
+      break
+    case "snoozeAll":
+      snoozeSource(globalKey, "Everything", Number(value), true)
+      break
+    case "wakeAll":
+      unsnoozeAll()
+      break
+    case "codes":
+      setCodesBypassQuiet(!codesBypassQuiet)
+      keepOpen = true
+      break
+    case "forgetRules":
+      forgetAllRules()
+      break
+    case "clearAll":
+      clearMissed()
+      break
+    }
+    if (!keepOpen) closeMenu()
+  }
+
   function menuDo(id, value) {
+    if (menuForPanel) { panelMenuDo(id, value); return }
     var row = menuRow
     if (!row) return
     var key = String(row.key), live = rowIndexFor(key) >= 0
@@ -4074,6 +4162,13 @@ Item {
                        service.barClearance + Style.space(30))
       return JSON.stringify(service.menuRows.map(function(r) { return r.type + ":" + (r.id || r.label || "") }))
     }
+    // Open the panel heading's menu, as a right-click on it would.
+    function panelMenu(): string {
+      if (!service.missedVisible) service.openMissed()
+      service.openPanelMenu(service.targetDisplayName, service.notificationWidth * 0.5,
+                            service.barClearance + Style.space(30))
+      return JSON.stringify(service.menuRows.map(function(r) { return r.type + ":" + (r.id || r.label || "") }))
+    }
     function menuPick(id: string, value: string): string {
       if (!service.menuOpen) return "no menu"
       service.menuDo(id, value)
@@ -4703,6 +4798,18 @@ Item {
               spec: Border.hyprlandActiveSpec(Commons.Color.notifications.border,
                                               service.windowBorderWidth)
               radius: missedHeader.radius
+            }
+
+            // Right-click: the heading's own menu. Only the right button, so
+            // the buttons on it still take their clicks.
+            MouseArea {
+              anchors.fill: parent
+              acceptedButtons: Qt.RightButton
+              enabled: !service.missedPeeking
+              onClicked: function(mouse) {
+                var p = mapToItem(null, mouse.x, mouse.y)
+                service.openPanelMenu(String(surface.modelData.name), p.x, p.y)
+              }
             }
 
             Row {
