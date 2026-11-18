@@ -51,7 +51,9 @@ function snapshot(n, key, urgencyEnum) {
   var found = Detect.scan(id.summary, id.body)
   var parsedExec = raw.app === "omarchy-action"
     ? Security.parseOmarchyExecArgv(hints["omarchy-exec-argv"])
-    : null
+    : raw.app === "Omamail"
+      ? Security.parseOmamailOpenArgv(hints["omarchy-exec-argv"])
+      : null
   return normalise({
     key: key,
     originalId: n.id || 0,
