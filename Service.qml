@@ -2387,8 +2387,12 @@ Item {
     var row = missed.get(at)
     if (row.live) { closeMissed(); activate(key); return }
     var copy = { senderPid: row.senderPid, source: row.source, appIcon: row.appIcon, link: row.link }
+    // Its sender is gone, but a command the card was allowed to carry
+    // (Omamail's "open this message") still knows where the click goes.
+    var argv = clickArgv(row)
     seeMissed([key])
     closeMissed()
+    if (argv) { runExecArgv(argv); return }
     routeRow(copy)
   }
 
@@ -3459,10 +3463,16 @@ Item {
       Quickshell.execDetached(argv[0].charAt(0) === "/" ? argv : ["/usr/bin/env"].concat(argv))
   }
 
+  // The command a click on this row runs, re-checked at the moment of use.
+  function clickArgv(row) {
+    var text = row ? row.execArgv : ""
+    return Security.parseOmarchyExecArgv(text) || Security.parseOmamailOpenArgv(text)
+  }
+
   function activate(key) {
     var at = rowIndexFor(key)
     var row = at >= 0 ? toasts.get(at) : null
-    var argv = Security.parseOmarchyExecArgv(row ? row.execArgv : "")
+    var argv = clickArgv(row)
     if (argv) {
       runExecArgv(argv)
       closeToast(key, "activated")

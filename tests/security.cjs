@@ -863,4 +863,30 @@ for (const u of ['https://example.com/', 'https://sub.example.co.uk/', 'https://
   assert.equal(slack.execArgv, '');
 }
 
+
+{
+  // Omamail's open-this-message click: one exact shape, rebuilt, from Omamail only.
+  const ok = ['omarchy-shell', 'shell', 'summon', 'omamail', JSON.stringify({accountId: 'imap:a@b.c', messageId: '1:INBOX', mailto: 'x'})];
+  assert.equal(JSON.stringify(S.parseOmamailOpenArgv(JSON.stringify(ok))),
+    JSON.stringify(['omarchy-shell', 'shell', 'summon', 'omamail', JSON.stringify({accountId: 'imap:a@b.c', messageId: '1:INBOX'})]));
+  for (const bad of [
+    ['omarchy-shell', 'shell', 'summon', 'other', '{"accountId":"a","messageId":"m"}'],
+    ['omarchy-shell', 'shell', 'call', 'omamail', '{"accountId":"a","messageId":"m"}'],
+    ['/tmp/omarchy-shell', 'shell', 'summon', 'omamail', '{"accountId":"a","messageId":"m"}'],
+    ['omarchy-shell', 'shell', 'summon', 'omamail', '{"accountId":"a"}'],
+    ['omarchy-shell', 'shell', 'summon', 'omamail', '{"accountId":1,"messageId":"m"}'],
+    ['omarchy-shell', 'shell', 'summon', 'omamail', '[]'],
+    ['omarchy-shell', 'shell', 'summon', 'omamail', '{"accountId":"a","messageId":"m"}', 'extra'],
+    ['bash', '-c', 'id'],
+  ]) assert.equal(S.parseOmamailOpenArgv(JSON.stringify(bad)), null, JSON.stringify(bad));
+  const hint = JSON.stringify(ok);
+  const mail = Store.snapshot({appName: 'Omamail', summary: 'Anna', body: 'Hi', hints: {'omarchy-exec-argv': hint}}, 'om1', {});
+  assert.notEqual(mail.execArgv, '');
+  assert.equal(Store.sanitiseForPersistence(mail).execArgv, '');
+  const spoof = Store.snapshot({appName: 'Slack', summary: 'x', body: 'y', hints: {'omarchy-exec-argv': hint}}, 'om2', {});
+  assert.equal(spoof.execArgv, '');
+  const shot = Store.snapshot({appName: 'Omamail', summary: 'x', body: 'y',
+    hints: {'omarchy-exec-argv': JSON.stringify(['tensaku-edit', '/tmp/a.png'])}}, 'om3', {});
+  assert.equal(shot.execArgv, '', 'Omamail may only open a message');
+}
 console.log('security JS: passed');

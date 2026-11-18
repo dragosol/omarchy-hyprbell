@@ -96,6 +96,29 @@ function parseOmarchyExecArgv(value) {
   return parsed
 }
 
+// Omamail's new-mail notification carries the message a click opens:
+// exactly `omarchy-shell shell summon omamail {"accountId","messageId"}`.
+// Nothing else from an "Omamail" sender runs - the payload is rebuilt from
+// the two ids, so no other summon option (a mailto draft, say) gets through.
+function parseOmamailOpenArgv(value) {
+  var text = String(value || "")
+  if (!text || text.length > MAX_URL) return null
+  var parsed
+  try { parsed = JSON.parse(text) } catch (e) { return null }
+  if (!Array.isArray(parsed) || parsed.length !== 5) return null
+  if (parsed[0] !== "omarchy-shell" || parsed[1] !== "shell" || parsed[2] !== "summon"
+      || parsed[3] !== "omamail" || typeof parsed[4] !== "string") return null
+  var payload
+  try { payload = JSON.parse(parsed[4]) } catch (e) { return null }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null
+  var account = payload.accountId, message = payload.messageId
+  if (typeof account !== "string" || typeof message !== "string") return null
+  if (!account || !message || account.length > 512 || message.length > 2048) return null
+  if ((account + message).indexOf(String.fromCharCode(0)) >= 0) return null
+  return ["omarchy-shell", "shell", "summon", "omamail",
+    JSON.stringify({ accountId: account, messageId: message })]
+}
+
 function safeLocalFilePath(path) {
   return typeof path === "string" && path.length <= MAX_URL
       && /^\/[^/]/.test(path) && !/[\x00-\x1f\x7f-\x9f\\]/.test(path)
