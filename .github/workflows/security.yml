@@ -16,9 +16,12 @@ jobs:
         with:
           persist-credentials: false
       # Helpers use /usr/bin/python3, not the scanner virtual environment.
-      - run: sudo apt-get update && sudo apt-get install -y python3-pil
-      - run: python3 -m venv /tmp/hyprbell-scanners
-      - run: /tmp/hyprbell-scanners/bin/pip install --require-hashes -r security/requirements.txt
+      # The tests also need GObject (gi), which only the system Python has, so
+      # the venv sees system packages; --ignore-installed still puts every
+      # hash-pinned scanner package in the venv, ahead of the system copies.
+      - run: sudo apt-get update && sudo apt-get install -y python3-pil python3-gi gir1.2-glib-2.0
+      - run: python3 -m venv --system-site-packages /tmp/hyprbell-scanners
+      - run: /tmp/hyprbell-scanners/bin/pip install --ignore-installed --require-hashes -r security/requirements.txt
       - run: /tmp/hyprbell-scanners/bin/semgrep scan --config security/semgrep --error --metrics=off .
       - run: /tmp/hyprbell-scanners/bin/python -m unittest discover -s tests -v
       - run: python3 security/check_invariants.py
