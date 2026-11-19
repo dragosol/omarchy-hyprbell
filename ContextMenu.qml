@@ -60,8 +60,14 @@ PopupWindow {
   readonly property real innerRadius: Math.max(0, plateRadius - edge)
 
   readonly property color ink: Commons.Color.notifications.text
-  readonly property color dim: Qt.darker(ink, 1.4)
-  readonly property color accent: Commons.Color.accent
+  // Hyprdrive's inks: labels at 0.95, glyphs at 0.8, hints thinner still -
+  // the same colour throughout, so a light theme's dark text stays dark.
+  readonly property bool lightTheme: ink.hslLightness < 0.5
+  readonly property color dim: tint(ink, lightTheme ? 0.60 : 0.45)
+  // The frame, and what a hovered row or a chosen chip lights in: Hyprland's
+  // active border, as Hyprdrive's menu does.
+  readonly property var frame: Border.hyprlandActiveSpec(Commons.Color.notifications.border, windowBorderWidth)
+  readonly property color highlight: frame.color
   // The theme's urgent colour, lifted: on dark themes it is a deep red that
   // reads as disabled at menu size.
   readonly property color danger: {
@@ -70,11 +76,13 @@ PopupWindow {
     return Qt.hsla(hue, Math.max(0.55, c.hslSaturation), Math.max(0.66, c.hslLightness), 1)
   }
   function tint(c, a) { var q = Qt.lighter(c, 1.0); return Qt.rgba(q.r, q.g, q.b, a) }
-  readonly property color hoverFill: tint(ink, 0.08)
-  readonly property color chipFill: tint(ink, 0.06)
-  readonly property color chipHover: tint(ink, 0.13)
-  readonly property color litFill: tint(accent, 0.22)
-  readonly property color litHover: tint(accent, 0.32)
+  readonly property color hoverFill: tint(highlight, 0.26)
+  readonly property color dangerFill: tint(danger, 0.18)
+  readonly property color chipFill: tint(ink, lightTheme ? 0.08 : 0.07)
+  readonly property color chipHover: tint(highlight, 0.26)
+  readonly property color litFill: tint(highlight, 0.48)
+  readonly property color litHover: tint(highlight, 0.56)
+  function smoothstep(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t) }
 
   // The footer explains whatever the pointer is on; resting nowhere, it
   // says what the rules for this notification are right now.
@@ -167,11 +175,13 @@ PopupWindow {
     height: implicitHeight
     radius: menu.plateRadius
     color: Commons.Color.notifications.background
-    borderSpec: Border.hyprlandActiveSpec(Commons.Color.notifications.border, menu.windowBorderWidth)
-    // Grows out of the corner nearest the click.
+    borderSpec: menu.frame
+    // Zooms out of the point clicked and back into it, as Hyprdrive's does:
+    // from 0.30 of its size, the plate whole by 30% of the way, its rows by
+    // 55%.
     transformOrigin: menu.up ? Item.BottomRight : Item.TopRight
-    scale: 0.94 + 0.06 * menu.p
-    opacity: menu.scaleReady ? Math.min(1, menu.p * 1.6) : 0
+    scale: 0.30 + 0.70 * menu.p
+    opacity: menu.scaleReady ? menu.smoothstep(menu.p / 0.30) : 0
     clip: true
 
     focus: true
@@ -217,13 +227,12 @@ PopupWindow {
                  : menu.padX)
           onNeedChanged: Qt.callLater(rowsColumn.measure)
 
-          // The cascade: each row a beat behind the one before, coming in
-          // from the click's side.
-          readonly property real arrive: Math.max(0, Math.min(1, (menu.p * 1.25) - index * 0.035))
-          opacity: arrive
-          transform: Translate { y: (1 - rowItem.arrive) * Style.space(4) * (menu.up ? 1 : -1) }
+          opacity: menu.smoothstep(menu.p / 0.55)
 
           readonly property bool rowHot: rowArea.containsMouse && clickable
+          // A hovered row's glyph and label step 4px in and grow a touch.
+          property real lift: rowHot ? 1 : 0
+          Behavior on lift { NumberAnimation { duration: Style.duration(140); easing.type: Easing.OutCubic } }
 
           Rectangle {
             visible: rowItem.isSep
@@ -231,40 +240,41 @@ PopupWindow {
             width: parent.width - 2 * menu.padX
             y: Math.floor(parent.height / 2)
             height: Math.max(1, Style.spacing.hairline)
-            color: menu.tint(menu.ink, 0.12)
+            color: menu.tint(menu.ink, 0.15)
           }
 
-          // The row's hover chip, inset from the plate's edge.
+          // The row's highlight: the plate's full width, in the frame's colour
+          // - the destructive row in its own.
           Rectangle {
             visible: rowItem.clickable
-            x: menu.edge
-            width: parent.width - 2 * menu.edge
+            width: parent.width
             height: parent.height
-            radius: menu.innerRadius
-            color: rowItem.rowHot ? menu.hoverFill : "transparent"
-            Behavior on color { ColorAnimation { duration: Style.duration(140) } }
+            color: rowItem.modelData.danger ? menu.dangerFill : menu.hoverFill
+            opacity: rowItem.lift
           }
 
           Text {
             id: glyph
             visible: !rowItem.isSep && text !== ""
-            x: menu.padX
+            x: menu.padX + Style.space(4) * rowItem.lift
             width: menu.glyphCol
             anchors.verticalCenter: parent.verticalCenter
             text: String(rowItem.modelData.glyph || "")
             textFormat: Text.PlainText
-            color: rowItem.modelData.danger ? menu.danger : menu.tint(menu.dim, 0.95)
+            color: rowItem.modelData.danger ? menu.danger : menu.tint(menu.ink, 0.8)
             font.family: Style.font.family
             font.pixelSize: menu.fontPx
-            scale: rowItem.rowHot ? 1.08 : 1
-            Behavior on scale { NumberAnimation { duration: Style.duration(140) } }
+            scale: 1 + 0.035 * rowItem.lift
           }
 
           Text {
             id: label
             visible: !rowItem.isSep
             x: menu.padX + (rowItem.type === "header" || rowItem.type === "scope" ? 0 : menu.glyphCol)
+               + Style.space(4) * rowItem.lift
             anchors.verticalCenter: parent.verticalCenter
+            transformOrigin: Item.Left
+            scale: 1 + 0.035 * rowItem.lift
             width: Math.max(0, (rowItem.hasChips ? chipRow.x - menu.hintGap / 2
                                 : rowItem.type === "toggle" ? toggleTrack.x - menu.hintGap / 2
                                 : hint.visible ? hint.x - menu.hintGap / 2
@@ -273,7 +283,7 @@ PopupWindow {
             textFormat: Text.PlainText
             elide: Text.ElideRight
             color: rowItem.modelData.danger ? menu.danger
-                 : rowItem.type === "scope" ? menu.dim : menu.ink
+                 : rowItem.type === "scope" ? menu.dim : menu.tint(menu.ink, 0.95)
             font.family: Style.font.family
             font.pixelSize: rowItem.type === "scope" ? menu.smallPx : menu.fontPx
             font.weight: rowItem.type === "header" ? Font.DemiBold : Font.Normal
@@ -305,9 +315,9 @@ PopupWindow {
             width: Math.round(menu.fontPx * 2.1)
             height: Math.round(menu.fontPx * 1.15)
             radius: height / 2
-            color: on ? menu.tint(menu.accent, rowItem.rowHot ? 0.55 : 0.42) : (rowItem.rowHot ? menu.chipHover : menu.chipFill)
+            color: on ? (rowItem.rowHot ? menu.litHover : menu.litFill) : (rowItem.rowHot ? menu.chipHover : menu.chipFill)
             border.width: inherited ? Math.max(1, Style.spacing.hairline) : 0
-            border.color: menu.tint(menu.accent, 0.6)
+            border.color: menu.tint(menu.highlight, 0.6)
             Behavior on color { ColorAnimation { duration: Style.duration(140) } }
 
             Rectangle {
@@ -317,7 +327,7 @@ PopupWindow {
               radius: width / 2
               y: inset
               x: toggleTrack.on ? parent.width - width - inset : inset
-              color: toggleTrack.on ? menu.accent : menu.dim
+              color: toggleTrack.on ? menu.tint(menu.ink, 0.95) : menu.dim
               Behavior on x { NumberAnimation { duration: Style.duration(160); easing.type: Easing.OutCubic } }
             }
           }
@@ -361,7 +371,7 @@ PopupWindow {
                 radius: Math.min(height / 2, menu.innerRadius)
                 color: on ? (hot ? menu.litHover : menu.litFill) : (hot ? menu.chipHover : menu.chipFill)
                 border.width: inherited ? Math.max(1, Style.spacing.hairline) : 0
-                border.color: menu.tint(menu.accent, 0.55)
+                border.color: menu.tint(menu.highlight, 0.55)
                 Behavior on color { ColorAnimation { duration: Style.duration(140) } }
                 // A hovered chip pops in from smaller, as Hyprdrive's do.
                 scale: chipArea.pressed ? 0.94 : 1
@@ -372,7 +382,7 @@ PopupWindow {
                   anchors.centerIn: parent
                   text: String(chip.modelData.label || "")
                   textFormat: Text.PlainText
-                  color: chip.on || chip.inherited ? menu.accent : (chip.hot ? menu.ink : menu.tint(menu.ink, 0.78))
+                  color: chip.on || chip.hot ? menu.tint(menu.ink, 0.95) : menu.tint(menu.ink, 0.8)
                   font.family: Style.font.family
                   font.pixelSize: menu.smallPx
                   font.weight: chip.on ? Font.DemiBold : Font.Normal
