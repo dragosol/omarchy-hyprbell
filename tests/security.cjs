@@ -818,6 +818,62 @@ for (const u of ['https://example.com/', 'https://sub.example.co.uk/', 'https://
   assert.equal(S.parseOmarchyExecArgv(JSON.stringify(['/tmp/../etc/passwd'])), null);
   assert.equal(S.parseOmarchyExecArgv(JSON.stringify(['-foo'])), null);
   assert.equal(S.parseOmarchyExecArgv(''), null);
+
+  // Editors open exactly one image: the two shapes Omarchy has sent.
+  for (const ok of [
+    ['satty', '/home/user/Pictures/screenshot-2026-08-24_10-00-00.png'],
+    ['tensaku-edit', '/tmp/a b.png'],
+    ['/usr/local/bin/swappy', '/tmp/shot.JPG'],
+    ['tensaku', '/tmp/shot.webp'],
+    ['omasnap', '/tmp/shot.png'],
+    ['/usr/bin/omasnap', 'file:///home/user/Pictures/a%20b%20%23%3F.png'],
+    ['omasnap', 'file:///tmp/shot.jpeg'],
+  ]) assert.equal(JSON.stringify(S.parseOmarchyExecArgv(JSON.stringify(ok))), JSON.stringify(ok), JSON.stringify(ok));
+  // A custom copy command (the reported case) or any other option is refused,
+  // before or after the image, in either spelling.
+  for (const bad of [
+    ['satty', '--filename', '/tmp/a.png', '--copy-command', 'sh -c id'],
+    ['satty', '/tmp/a.png', '--copy-command', 'touch /tmp/pwned'],
+    ['satty', '--copy-command=touch /tmp/pwned', '/tmp/a.png'],
+    ['satty', '--filename', '/tmp/a.png'],
+    ['satty', '--filename', '/tmp/a.png', '--output-filename', '/tmp/a.png'],
+    ['satty', '--early-exit', '/tmp/a.png'],
+    ['swappy', '-f', '/tmp/a.png', '-o', '/home/user/.bashrc'],
+    ['tensaku-edit', '/tmp/a.png', '/tmp/b.png'],
+    ['tensaku-edit', '--', '/tmp/a.png'],
+    ['omasnap', '--recent', '1', '/tmp/a.png'],
+    ['omasnap', '--file', '/tmp/a.png'],
+    ['satty'],
+    // Not an image, or not a plain local file.
+    ['satty', '/home/user/.bashrc'],
+    ['satty', '/home/user/app.desktop'],
+    ['satty', 'shot.png'],
+    ['satty', '/tmp/../home/user/shot.png'],
+    ['satty', 'file:///tmp/a.png'],
+    ['omasnap', 'file:///tmp/a.png?x=1'],
+    ['omasnap', 'file:///tmp/a.png#frag'],
+    ['omasnap', 'file://host/tmp/a.png'],
+    ['omasnap', 'file:///tmp/%2E%2E/home/user/a.png'],
+    ['omasnap', 'file:///tmp/a%0A.png'],
+    ['omasnap', 'file:///tmp/a.sh'],
+    ['omasnap', 'file:///tmp/%E0%A4%A.png'],
+    ['/opt/bin/satty', '/tmp/a.png'],
+    ['/usr/bin/../bin/satty', '/tmp/a.png'],
+  ]) assert.equal(S.parseOmarchyExecArgv(JSON.stringify(bad)), null, JSON.stringify(bad));
+  // Any program can call itself "omarchy-action". A spoofed sender gets the
+  // same exact shapes and nothing more - live, restored, or re-checked at
+  // the click.
+  const forged = JSON.stringify(['satty', '/tmp/a.png', '--copy-command', 'touch /tmp/pwned']);
+  const spoofed = Store.snapshot({appName: 'omarchy-action', summary: 'Screenshot saved', body: 'Click to edit',
+    hints: {'omarchy-exec-argv': forged}}, 'sp1', {});
+  assert.equal(spoofed.execArgv, '', 'a spoofed omarchy-action cannot pass options to an editor');
+  // What is saved never carries a command, and the click re-checks whatever a
+  // row holds (Service.qml clickArgv) with the same two parsers.
+  assert.equal(Store.sanitiseForPersistence(Object.assign({}, spoofed, {execArgv: forged})).execArgv, '');
+  assert.equal(S.parseOmarchyExecArgv(forged) || S.parseOmamailOpenArgv(forged), null);
+  const real = Store.snapshot({appName: 'omarchy-action', summary: 'Screenshot saved', body: 'Click to edit',
+    hints: {'omarchy-exec-argv': JSON.stringify(['satty', '/tmp/a.png'])}}, 'sp2', {});
+  assert.equal(real.execArgv, JSON.stringify(['satty', '/tmp/a.png']));
   for (const argv of [
     ['xdg-open', '/home/user/Downloads/a file #1%.txt'],
     ['omarchy-agent-crash', '12345', 'untrusted\nagent instructions', '/tmp/anything', 'SIGSEGV'],

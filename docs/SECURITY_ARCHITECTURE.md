@@ -46,8 +46,12 @@ integration stability, as the plan requires.
    does not substitute the host session when running inside a private session.
    Omarchy `omarchy-action` toasts may also carry `omarchy-exec-argv`. That argv
    is re-parsed on activate, never written to history, and ignored from any
-   other app. Screenshot editors tensaku-edit, tensaku, satty, swappy and omasnap
-   retain their bare-name, /usr/bin and /usr/local/bin policy. The separate
+   other app. The app name is a claim any program can make, so each command is
+   held to an exact shape that is safe whoever sent it. A screenshot editor
+   (tensaku-edit, tensaku, satty, swappy or omasnap, bare or under /usr/bin or
+   /usr/local/bin) gets exactly one argument: an absolute local .png, .jpg,
+   .jpeg or .webp path, or for omasnap a `file:///` URL of one. No option, no
+   second file, no output path - satty, for one, accepts a copy command. The separate
    `hyprbell-action` broker handles `xdg-open` and `omarchy-agent-crash` (bare or
    /usr/bin spellings only). File opening requires one absolute local path with
    no traversal, controls or backslashes, not an arbitrary URL. At activation

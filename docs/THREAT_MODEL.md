@@ -23,7 +23,7 @@ window title does not prove origin.
 | Website/redirect/DNS/image | Network and decoder | Opt-in, public pinned address, TLS validation, caps, sandbox |
 | Notification row | Persistent state | Separate sanitisation, private atomic files, bounded retention |
 | Action/reply/clipboard | External side effect | Explicit user action, argv, bounded values, exact reply matching |
-| omarchy-exec-argv hint | Process exec | Screenshot-editor allowlist; separately brokered local-file opening and PID-only crash diagnosis; re-parse on activate; never persisted |
+| omarchy-exec-argv hint | Process exec | Screenshot editor plus exactly one local image (no options); separately brokered local-file opening and PID-only crash diagnosis; re-parse on activate; never persisted |
 | Window focus target | Hyprland Lua | Compositor hexadecimal address only |
 | Helper process | HOME/network | Bubblewrap fail-closed profiles |
 | GitHub PR | CI token/tools | SHA-pinned actions, read-only default, no secrets or privileged PR trigger |

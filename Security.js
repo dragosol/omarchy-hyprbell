@@ -54,9 +54,11 @@ function openExternalUrl(raw) {
   return safe ? Qt.openUrlExternally(safe) : false
 }
 
-// App names are claims, not authentication. Screenshot editors retain their
-// existing policy; first-party file/crash actions have separate argument rules
-// and go through the activation helper rather than directly executing the hint.
+// App names are claims, not authentication: any program can send a
+// notification as "omarchy-action". So every command here is held to an exact
+// shape that is safe whoever sent it. Screenshot editors open one image
+// (parseEditorArgv); first-party file/crash actions have their own argument
+// rules and go through the activation helper rather than running the hint.
 function parseOmarchyExecArgv(value) {
   if (Array.isArray(value)) {
     try { value = JSON.stringify(value) } catch (e) { return null }
@@ -86,14 +88,32 @@ function parseOmarchyExecArgv(value) {
     // metadata become instructions in its agent prompt.
     return [base, parsed[1]]
   }
-  if (!/^(?:tensaku-edit|tensaku|satty|swappy|omasnap)$/.test(base)) return null
-  if (prog.charAt(0) === "/") {
-    if (prog.indexOf("\0") >= 0 || /\/\.\.(?:\/|$)/.test(prog)) return null
-    if (prog !== "/usr/bin/" + base && prog !== "/usr/local/bin/" + base) return null
-  } else if (prog.indexOf("/") >= 0 || !/^[A-Za-z0-9._+-]+$/.test(prog)) {
-    return null
-  }
-  return parsed
+  return parseEditorArgv(parsed)
+}
+
+// A screenshot editor opens one image, and nothing else gets through: no
+// option, no second file, no output path. Satty, for one, takes a copy
+// command, so an editor allowed any arguments was a way to run a program the
+// notification's sender chose. These are exactly the two shapes Omarchy ever
+// sent:
+//   [editor, /path/to/shot.png]        omarchy-capture-screenshot, Aug 2026
+//                                      ($SCREENSHOT_EDITOR "$FILEPATH")
+//   [omasnap, file:///path/to/shot.png] omasnap's own "Click to edit"
+var EDITORS = /^(?:tensaku-edit|tensaku|satty|swappy|omasnap)$/
+var IMAGE_FILE = /\.(?:png|jpe?g|webp)$/i
+function parseEditorArgv(parsed) {
+  if (!Array.isArray(parsed) || parsed.length !== 2) return null
+  var prog = parsed[0], target = parsed[1]
+  if (typeof prog !== "string" || typeof target !== "string") return null
+  var base = prog.substring(prog.lastIndexOf("/") + 1)
+  if (!EDITORS.test(base)) return null
+  if (prog !== base && prog !== "/usr/bin/" + base && prog !== "/usr/local/bin/" + base) return null
+  if (safeLocalFilePath(target)) return IMAGE_FILE.test(target) ? [prog, target] : null
+  // omasnap's form: a file URL, percent-encoded, with nothing after the path.
+  if (base !== "omasnap" || !/^file:\/\/\/[A-Za-z0-9%._~!$&'()*+,;=:@\/-]+$/.test(target)) return null
+  var path
+  try { path = decodeURIComponent(target.substring(7)) } catch (e) { return null }
+  return safeLocalFilePath(path) && IMAGE_FILE.test(path) ? [prog, target] : null
 }
 
 // Omamail's new-mail notification carries the message a click opens:

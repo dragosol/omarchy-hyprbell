@@ -368,8 +368,8 @@ Omarchy's existing comma-key shortcuts work without configuration:
 | `SUPER` `ALT` `,` | invoke the newest one, as clicking it would |
 | `SUPER` `SHIFT` `ALT` `,` | put the last few back on screen |
 
-Omarchy screenshot toasts carry `omarchy-exec-argv`. Click and Super+Alt+, run that
-editor. The same gestures open a Taildrop notification's local file or launch
+Omarchy screenshot toasts carry `omarchy-exec-argv`. Click and Super+Alt+, open the
+screenshot in that editor, and only that: the editor gets the image and no options. The same gestures open a Taildrop notification's local file or launch
 Omarchy's configured agent to diagnose a crash by PID. Crash details are retrieved
 by the agent, not taken from notification-supplied metadata. Taildrop opening
 requires an existing non-executable regular file at an absolute path; URLs,

@@ -2,6 +2,15 @@
 
 ## Hyprbell (formerly Omapager Pro)
 
+- 1.5.2: a screenshot editor named in `omarchy-exec-argv` now gets exactly one
+  argument, the image: an absolute local .png/.jpg/.jpeg/.webp path, or for
+  omasnap a `file:///` URL of one. Those are the only two shapes Omarchy has
+  sent (`omarchy-capture-screenshot` in August 2026, and omasnap's own "Click
+  to edit"). Until now only the editor's name was checked and the rest of the
+  argv passed through, so a notification claiming to be `omarchy-action` could
+  hand satty a `--copy-command` and run a program of its choosing once you
+  opened the card and copied. Reported by the marketplace review of `7073a76`.
+
 - Renamed to Hyprbell: new plugin id, IPC target, layer namespace and
   state directory. `hyprbell-run-helper` moves the old state and icon folders
   across once, outside the sandbox, only when nothing exists at the new path
