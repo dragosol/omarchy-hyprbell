@@ -233,7 +233,8 @@ code-bearing notifications. Do not remove either boundary.
 Omarchy `omarchy-action` toasts carry `omarchy-exec-argv`. Click and the stock
 `notifications invokeLast` binding (Super+Alt+,) re-parse it through
 `Security.parseOmarchyExecArgv`. Screenshot editors (tensaku-edit, tensaku,
-satty, swappy, omasnap) retain their bare-name, /usr/bin and /usr/local/bin policy.
+satty, swappy, omasnap; bare, /usr/bin or /usr/local/bin) get exactly one argument,
+a local image path, or for omasnap a `file:///` URL of one; never an option.
 Two additional actions accept only a bare name or /usr/bin spelling:
 
 - `xdg-open` accepts one absolute local file path, not a URL, option or traversal.
